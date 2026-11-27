@@ -25,6 +25,8 @@ struct TabletStation: Decodable, Identifiable {
 struct TabletFilm: Decodable, Identifiable {
     let id: String; let title: String; let description: String; let path: String; let captions: String; let poster: String?
     let musicCredit: TabletFilmMusicCredit?
+    // The reading summary omits the opening that confirms a submitted work product.
+    let summaryStart: Double?
 }
 struct TabletFilmMusicCredit: Decodable {
     let title: String; let artist: String; let sourceURL: URL; let licenseURL: URL; let changes: String

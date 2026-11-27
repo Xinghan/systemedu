@@ -303,6 +303,7 @@ final class TabletMissionTests: XCTestCase {
         web.buttons["关闭照片"].tap(); web.buttons["关闭面板"].tap()
         XCTAssertFalse(web.staticTexts["已保存到本机"].exists)
         let next = app.buttons["expedition-next-step"]; XCTAssertTrue(next.isEnabled); next.tap()
+        closeChapterSummary(app)
         XCTAssertTrue(app.staticTexts["expedition-delivery-title"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.images["expedition-work-image"].exists)
         XCTAssertFalse(app.buttons["expedition-submit"].isEnabled)
@@ -312,9 +313,7 @@ final class TabletMissionTests: XCTestCase {
         let submit = app.buttons["expedition-submit"]
         if !submit.isHittable { app.swipeUp() }
         XCTAssertTrue(submit.isEnabled); capture("expedition-work-self-check"); submit.tap()
-        XCTAssertTrue(app.buttons["ipad-close-film"].waitForExistence(timeout: 15))
-        capture("first-chapter-completion-auto-playing")
-        app.buttons["ipad-close-film"].tap()
+        XCTAssertFalse(app.buttons["ipad-close-film"].exists, "Submitting work must not force the same summary twice")
         let advance = app.buttons["expedition-next-chapter"]
         XCTAssertTrue(advance.waitForExistence(timeout: 10)); capture("expedition-signed-delivery")
         if !advance.isHittable { app.swipeUp() }; advance.tap()
@@ -495,12 +494,14 @@ final class TabletMissionTests: XCTestCase {
         XCTAssertTrue(finish.waitForExistence(timeout: 20), "Return must restore the saved final reading page")
         capture("delivery-returned-to-final-lesson")
         finish.tap() // Exercise the WebView bridge again, not just the native continue button.
+        closeChapterSummary(app)
         XCTAssertTrue(app.staticTexts["expedition-delivery-title"].waitForExistence(timeout: 15))
         XCTAssertTrue((note.value as? String)?.contains("Return keeps this draft.") == true)
         XCTAssertFalse(app.buttons["expedition-submit"].isEnabled, "Returning never submits incomplete work")
         app.terminate(); app.launch(); enter(app)
         XCTAssertEqual(app.staticTexts["expedition-chapter-title"].label, "星光为什么变暗了")
         app.buttons["expedition-continue"].tap() // All lessons read: home enters the work form directly.
+        closeChapterSummary(app)
         XCTAssertTrue(back.waitForExistence(timeout: 15))
         XCTAssertTrue((note.value as? String)?.contains("Return keeps this draft.") == true)
         XCUIDevice.shared.orientation = .portrait
@@ -581,7 +582,13 @@ final class TabletMissionTests: XCTestCase {
         }
         capture("lesson-contextual-film-replay")
     }
-    @MainActor private func finishCurrentLesson(_ app: XCUIApplication, finalStep: Bool, nextTitle: String? = nil) {
+    @MainActor private func closeChapterSummary(_ app: XCUIApplication) {
+        let close = app.buttons["ipad-close-film"]
+        XCTAssertTrue(close.waitForExistence(timeout: 15), "Completing a chapter must present its summary before work submission")
+        XCTAssertTrue(app.buttons["ipad-film-continue"].label.contains("整理本章作品"))
+        close.tap()
+    }
+    @MainActor private func finishCurrentLesson(_ app: XCUIApplication, finalStep: Bool, nextTitle: String? = nil, dismissSummary: Bool = true) {
         let web = app.webViews.firstMatch
         let contents = web.buttons["打开课文目录"]
         XCTAssertTrue(contents.waitForExistence(timeout: 20))
@@ -606,6 +613,7 @@ final class TabletMissionTests: XCTestCase {
         if let nextTitle { XCTAssertEqual(finish.label, "完成本节，进入「\(nextTitle)」") }
         for _ in 0..<12 { if finish.isHittable { break }; web.swipeUp() }
         XCTAssertTrue(finish.isHittable, web.debugDescription); finish.tap()
+        if finalStep && dismissSummary { closeChapterSummary(app) }
     }
     @MainActor func testEveryResearchLessonShowsItsOwnIdentityAndExplicitHandoff() {
         XCUIDevice.shared.orientation = .landscapeLeft
@@ -645,6 +653,7 @@ final class TabletMissionTests: XCTestCase {
         finishCurrentLesson(app, finalStep: false)
         let third = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "本章第 3 / 5 节")).firstMatch
         XCTAssertTrue(third.waitForExistence(timeout: 15), app.debugDescription)
+        XCTAssertFalse(app.buttons["ipad-close-film"].exists, "Intermediate lessons must not play the whole chapter's closing")
         capture("completion-forward-to-third-lesson")
         app.buttons["ipad-lesson-back"].tap(); app.buttons["expedition-continue"].tap()
         XCTAssertTrue(third.waitForExistence(timeout: 15))
@@ -659,7 +668,12 @@ final class TabletMissionTests: XCTestCase {
             let heading = app.staticTexts["expedition-chapter-title"]
             XCTAssertTrue(heading.waitForExistence(timeout: 15)); XCTAssertEqual(heading.label, title)
             app.buttons["expedition-continue"].tap()
-            finishCurrentLesson(app, finalStep: true)
+            finishCurrentLesson(app, finalStep: true, dismissSummary: false)
+            XCTAssertTrue(app.buttons["ipad-close-film"].waitForExistence(timeout: 15), title + " must automatically present its own closing")
+            XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Navigation QA · " + title + " · 接下来整理作品")).firstMatch.exists)
+            XCTAssertTrue(app.buttons["ipad-film-continue"].label.contains("整理本章作品"))
+            if [0, 5, 12].contains(index) { capture("chapter-\(index + 2)-closing-before-submission") }
+            app.buttons["ipad-close-film"].tap()
             XCTAssertTrue(app.staticTexts["expedition-delivery-title"].waitForExistence(timeout: 15), title)
             let checks = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "evidence-check-"))
             for i in 0..<checks.count {
@@ -670,13 +684,10 @@ final class TabletMissionTests: XCTestCase {
             let submit = app.buttons["expedition-submit"]
             for _ in 0..<12 { if submit.isHittable { break }; app.swipeUp() }
             XCTAssertTrue(submit.isEnabled, title); submit.tap()
-            XCTAssertTrue(app.buttons["ipad-close-film"].waitForExistence(timeout: 15), title + " must automatically present its own closing")
-            if index + 1 < chapters.count { XCTAssertTrue(app.buttons["ipad-film-continue"].label.contains(chapters[index + 1])) }
-            else { XCTAssertTrue(app.buttons["ipad-film-continue"].label.contains("完成远航")) }
-            if [0, 5, 12].contains(index) { capture("chapter-\(index + 2)-closing-video") }
-            app.buttons["ipad-close-film"].tap()
             let next = app.buttons["expedition-next-chapter"]
             XCTAssertTrue(next.waitForExistence(timeout: 15), title)
+            XCTAssertFalse(app.buttons["ipad-close-film"].exists, "Submitting must not repeat the summary")
+            if index + 1 < chapters.count { XCTAssertTrue(next.label.contains(chapters[index + 1])) }
             for _ in 0..<12 { if next.isHittable { break }; app.swipeUp() }
             if [0, 5, 12].contains(index) { capture("chapter-\(index + 2)-handoff") }
             next.tap()
@@ -691,9 +702,40 @@ final class TabletMissionTests: XCTestCase {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = navigationApp("chapter-endings"); enter(app)
         app.buttons["expedition-continue"].tap()
-        finishCurrentLesson(app, finalStep: true)
+        finishCurrentLesson(app, finalStep: true, dismissSummary: false)
+        let close = app.buttons["ipad-close-film"]
+        XCTAssertTrue(close.waitForExistence(timeout: 15), "The final lesson completion must present the chapter summary before requiring work submission")
+        XCTAssertTrue(app.staticTexts["林岚的阶段回信"].exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Navigation QA · 星光为什么变暗了 · 接下来整理作品")).firstMatch.exists)
+        XCTAssertTrue(app.buttons["ipad-film-continue"].label.contains("整理本章作品"))
+        let timer = app.staticTexts["ipad-film-time"]
+        expectation(for: NSPredicate(format: "label != %@", "已播放 0 秒"), evaluatedWith: timer)
+        waitForExpectations(timeout: 10)
+        capture("completion-summary-before-work-submission")
+        app.buttons["ipad-film-transcript"].tap()
+        let musicCredit = app.staticTexts["ipad-film-music-credit"]
+        XCTAssertTrue(musicCredit.waitForExistence(timeout: 5))
+        XCTAssertTrue(musicCredit.label.contains("PeriTune"))
+        XCTAssertFalse(app.staticTexts["队员，你的星光调查卡已经归档。"].exists, "A reading summary must not claim an unsubmitted work product is archived")
+        capture("completion-summary-trimmed-transcript")
+        app.buttons["收起"].tap()
+        let playback = app.buttons["ipad-film-play"]
+        if playback.label == "暂停" { playback.tap() }
+        let subtitles = app.buttons["ipad-film-subtitles"]
+        if subtitles.value as? String == "关闭" { subtitles.tap() }
+        let progress = app.sliders["播放进度"]
+        progress.adjust(toNormalizedSliderPosition: 0)
+        expectation(for: NSPredicate(format: "label == %@", "让观察可以复查，是很好的开始。"), evaluatedWith: app.staticTexts["ipad-film-caption"])
+        waitForExpectations(timeout: 5)
+        app.buttons["ipad-film-surface"].tap()
+        XCTAssertTrue(close.isHittable); close.tap()
         XCTAssertTrue(app.staticTexts["expedition-delivery-title"].waitForExistence(timeout: 15))
-        XCTAssertFalse(app.buttons["ipad-close-film"].exists, "Reading alone has not submitted the chapter")
+        XCTAssertFalse(app.buttons["expedition-submit"].isEnabled, "Watching the summary cannot submit incomplete work")
+        let review = app.buttons["expedition-replay-summary"]
+        XCTAssertTrue(review.isHittable); review.tap()
+        XCTAssertTrue(close.waitForExistence(timeout: 10))
+        app.buttons["ipad-film-continue"].tap()
+        XCTAssertTrue(review.waitForExistence(timeout: 10))
         let checks = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "evidence-check-"))
         for i in 0..<checks.count {
             let check = app.buttons["evidence-check-\(i)"]
@@ -703,27 +745,11 @@ final class TabletMissionTests: XCTestCase {
         let submit = app.buttons["expedition-submit"]
         for _ in 0..<12 { if submit.isHittable { break }; app.swipeUp() }
         XCTAssertTrue(submit.isEnabled); submit.tap()
-        let close = app.buttons["ipad-close-film"]
-        XCTAssertTrue(close.waitForExistence(timeout: 15))
-        XCTAssertTrue(app.staticTexts["林岚的阶段回信"].exists)
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Navigation QA · 「星光调查卡」已归档")).firstMatch.exists)
-        let timer = app.staticTexts["ipad-film-time"]
-        expectation(for: NSPredicate(format: "label != %@", "已播放 0 秒"), evaluatedWith: timer)
-        waitForExpectations(timeout: 10)
-        capture("completion-film-auto-playing")
-        app.buttons["ipad-film-transcript"].tap()
-        let musicCredit = app.staticTexts["ipad-film-music-credit"]
-        XCTAssertTrue(musicCredit.waitForExistence(timeout: 5))
-        XCTAssertTrue(musicCredit.label.contains("PeriTune"))
-        capture("completion-film-licensed-music-credit")
-        app.buttons["收起"].tap()
-        app.buttons["ipad-film-surface"].tap()
-        XCTAssertTrue(close.isHittable); close.tap()
         let replay = app.buttons["expedition-replay-completion"]
         XCTAssertTrue(replay.waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["这一章，你有了自己的成果"].exists)
-        XCTAssertFalse(close.exists)
-        capture("completion-film-closed-receipt")
+        XCTAssertFalse(close.exists, "Submitting must not automatically play the summary a second time")
+        capture("completion-summary-submitted-receipt")
         replay.tap(); XCTAssertTrue(close.waitForExistence(timeout: 10))
         XCUIDevice.shared.orientation = .portrait
         let next = app.buttons["ipad-film-continue"]

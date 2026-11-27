@@ -53,7 +53,7 @@ private struct ExpeditionJourneyView: View {
                     if profile == nil { CrewIdentityView(story: story, onConfirm: saveProfile) }
                     else if let receipt {
                         ExpeditionReceiptView(receipt: receipt, handoff: story.chapters.first { $0.id == receipt.chapterId }?.handoff ?? "", onContinue: { self.receipt = nil },
-                            completionFilm: story.completionFilms?[receipt.chapterId], autoPlayCompletion: true,
+                            completionFilm: story.completionFilms?[receipt.chapterId],
                             nextChapterTitle: chapter?.title)
                     } else if let chapter { chapterHome(chapter) }
                     else { finish }
@@ -64,7 +64,7 @@ private struct ExpeditionJourneyView: View {
                     if let chapter = story.chapters.first(where: { $0.id == destination.chapterID }), let profile {
                         switch destination {
                         case .work:
-                            ExpeditionDeliveryView(story: story, chapter: chapter, mission: mission, profile: profile, store: store,
+                            ExpeditionDeliveryView(story: story, chapter: chapter, mission: mission, profile: profile, store: store, completionFilm: story.completionFilms?[chapter.id],
                                 onBack: { returnFromDelivery(chapter) }) { saved in
                                 receipt = saved; path = []
                             }.id(destination)

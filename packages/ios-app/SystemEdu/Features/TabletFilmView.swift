@@ -27,6 +27,7 @@ struct TabletFilmView: View {
     var onContinue: (() -> Void)?
     var continueTitle: String
     var context: String?
+    let startAt: Double
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("systemedu.ipad.chinese-film-captions") private var hasCaptions = true
@@ -40,12 +41,14 @@ struct TabletFilmView: View {
     @State private var controlsVisible = true
     @State private var transcript = false
 
-    init(film: TabletFilm, continueTitle: String = "进入任务", context: String? = nil, onContinue: (() -> Void)? = nil) {
+    init(film: TabletFilm, continueTitle: String = "进入任务", context: String? = nil, startAt: Double = 0, onContinue: (() -> Void)? = nil) {
         self.onContinue = onContinue
         self.continueTitle = continueTitle
         self.context = context
         self.film = film
-        self.captions = FilmCaption.load(film.captions)
+        self.startAt = max(0, startAt)
+        self._seconds = State(initialValue: max(0, startAt))
+        self.captions = FilmCaption.load(film.captions).filter { $0.start >= max(0, startAt) }
     }
 
     var body: some View {
@@ -97,13 +100,13 @@ struct TabletFilmView: View {
                         Button { togglePlayback() } label: {
                             Image(systemName: playing ? "pause.fill" : "play.fill").font(.title3).frame(width: 44, height: 44)
                         }.accessibilityLabel(playing ? "暂停" : "播放").accessibilityIdentifier("ipad-film-play")
-                        Text(time(seconds)).monospacedDigit().accessibilityLabel("已播放 \(Int(seconds)) 秒")
+                        Text(time(seconds - startAt)).monospacedDigit().accessibilityLabel("已播放 \(Int(max(0, seconds - startAt))) 秒")
                             .accessibilityIdentifier("ipad-film-time")
-                        Slider(value: $seconds, in: 0...max(duration, seconds, 1)) { editing in
+                        Slider(value: $seconds, in: startAt...max(duration, seconds, startAt + 1)) { editing in
                             dragging = editing
                             if !editing { seek(seconds) }
                         }.accessibilityLabel("播放进度").disabled(duration <= 0)
-                        Text(time(duration)).monospacedDigit().accessibilityLabel("影片总时长")
+                        Text(time(duration - startAt)).monospacedDigit().accessibilityLabel("影片总时长")
                     }.font(.callout).padding(.horizontal, 24).padding(.vertical, 10).background(.black.opacity(0.72))
                     }
                 }
@@ -165,8 +168,10 @@ struct TabletFilmView: View {
         guard player == nil, let url = TabletMission.bundledURL(film.path) else { return }
         let video = AVPlayer(url: url)
         player = video
+        seconds = startAt
+        if startAt > 0 { video.seek(to: CMTime(seconds: startAt, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) }
         observer = video.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.2, preferredTimescale: 600), queue: .main) { t in
-            if !dragging, t.seconds.isFinite { seconds = max(0, t.seconds) }
+            if !dragging, t.seconds.isFinite { seconds = max(startAt, t.seconds) }
             if let total = video.currentItem?.duration.seconds, total.isFinite { duration = total }
         }
         video.play()
@@ -174,7 +179,7 @@ struct TabletFilmView: View {
     }
 
     private func seek(_ value: Double) {
-        seconds = max(0, value)
+        seconds = max(startAt, value)
         finished = duration > 0 && seconds >= duration - 0.2
         player?.seek(to: CMTime(seconds: seconds, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
     }
@@ -182,7 +187,7 @@ struct TabletFilmView: View {
     private func togglePlayback() {
         if playing { player?.pause(); playing = false }
         else {
-            if duration > 0 && seconds >= duration - 0.2 { seek(0) }
+            if duration > 0 && seconds >= duration - 0.2 { seek(startAt) }
             player?.play()
             playing = true
         }

@@ -8,6 +8,7 @@ struct ExpeditionDeliveryView: View {
     let mission: TabletMission
     let profile: CrewProfile
     @ObservedObject var store: LearningStore
+    let completionFilm: TabletFilm?
     let onBack: () -> Void
     let onSubmit: (ExpeditionReceipt) -> Void
     @State private var draft = ExpeditionDraft()
@@ -17,6 +18,8 @@ struct ExpeditionDeliveryView: View {
     @State private var requirement: ExpeditionRequirement?
     @State private var error: String?
     @State private var preview: SharedFile?
+    @State private var presentedFilm: TabletFilm?
+    @State private var summaryStarted = false
     private var missing: [String] { draft.missing(chapter) }
     private var stepsDone: Bool { chapter.isReadyForDelivery(mission: mission, store: store) }
     var body: some View {
@@ -29,6 +32,10 @@ struct ExpeditionDeliveryView: View {
                         Text(chapter.delivery.title).font(.largeTitle.bold()).accessibilityIdentifier("expedition-delivery-title")
                         Text("把亲手完成的成果收好，带进下一章。").foregroundStyle(.white.opacity(0.65))
                     }
+                }
+                if let completionFilm {
+                    Button { presentedFilm = completionFilm } label: { Label("重看本章总结", systemImage: "play.rectangle.fill") }
+                        .buttonStyle(.bordered).accessibilityIdentifier("expedition-replay-summary")
                 }
                 ForEach(chapter.delivery.evidence) { item in
                     VStack(alignment: .leading, spacing: 13) {
@@ -88,7 +95,19 @@ struct ExpeditionDeliveryView: View {
                         .accessibilityIdentifier("expedition-delivery-back")
                 }
             }
-            .task { load() }
+            .task {
+                load()
+                guard ready, !summaryStarted, let completionFilm else { return }
+                // Present from the destination after its navigation transition has settled.
+                do { try await Task.sleep(for: .milliseconds(400)) } catch { return }
+                guard !Task.isCancelled, !summaryStarted else { return }
+                summaryStarted = true
+                presentedFilm = completionFilm
+            }
+            .fullScreenCover(item: $presentedFilm) { film in
+                TabletFilmView(film: film, continueTitle: "整理本章作品",
+                    context: "\(profile.name) · \(chapter.title) · 接下来整理作品", startAt: film.summaryStart ?? 0, onContinue: {})
+            }
             .fileImporter(isPresented: $importing, allowedContentTypes: [.data], allowsMultipleSelection: false) { result in
                 do {
                     guard let url = try result.get().first, let requirement else { return }
@@ -165,13 +184,11 @@ struct ExpeditionReceiptView: View {
     let handoff: String
     let onContinue: (() -> Void)?
     var completionFilm: TabletFilm? = nil
-    var autoPlayCompletion = false
     var nextChapterTitle: String? = nil
     @State private var preview: SharedFile?
     @State private var export: SharedFile?
     @State private var error: String?
     @State private var presentedFilm: TabletFilm?
-    @State private var autoPlayStarted = false
     @State private var continueAfterFilm = false
     var body: some View {
         ScrollView {
@@ -202,15 +219,6 @@ struct ExpeditionReceiptView: View {
             }.padding(32).frame(maxWidth: 900).frame(maxWidth: .infinity)
         }.background(Color.expeditionNight).foregroundStyle(.white).tint(.expeditionGold)
             .sheet(item: $preview) { FilePreview(url: $0.url) }.sheet(item: $export) { ShareSheet(url: $0.url) }
-            .task(id: receipt.id) {
-                guard autoPlayCompletion, !autoPlayStarted, let completionFilm else { return }
-                // Let the completed delivery screen finish returning to the receipt before presenting.
-                do { try await Task.sleep(for: .milliseconds(400)) } catch { return }
-                // Navigation can cancel and restart this task. Only consume autoplay when presenting.
-                guard !Task.isCancelled, !autoPlayStarted else { return }
-                autoPlayStarted = true
-                presentedFilm = completionFilm
-            }
             .fullScreenCover(item: $presentedFilm, onDismiss: {
                 if continueAfterFilm { continueAfterFilm = false; onContinue?() }
             }) { film in

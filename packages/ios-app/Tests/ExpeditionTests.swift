@@ -62,6 +62,13 @@ final class ExpeditionTests: XCTestCase {
                 XCTAssertGreaterThan(FilmCaption.load(film.captions).count, 1)
             }
             XCTAssertEqual(closing.musicCredit?.artist, "PeriTune")
+            let captions = FilmCaption.load(closing.captions)
+            let summaryStart = try XCTUnwrap(closing.summaryStart)
+            XCTAssertGreaterThan(summaryStart, 0)
+            XCTAssertEqual(summaryStart, captions[1].start, accuracy: 0.001)
+            XCTAssertTrue(captions[0].text.contains("归档"))
+            XCTAssertFalse(captions.filter { $0.start >= summaryStart }.contains { $0.text.contains("归档") }, "Reading summaries must not claim work is already submitted")
+            XCTAssertNil(introduction.summaryStart, "Introductions must still start at the beginning")
         }
         XCTAssertEqual(paths.count, 28)
         let film = try XCTUnwrap(story.completionFilms?["research-P1"])
