@@ -75,6 +75,61 @@ final class TabletMissionTests: XCTestCase {
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertEqual(app.images["crew-profile-portrait"].label, "Portrait QA的卡通形象")
     }
+    @MainActor func testSimplifiedClassroomOpensOriginalDownloadsAndFilesPicker() {
+        verifyClassroomMaterials(exportZIP: true)
+    }
+    @MainActor func testNotebookAndCSVRenderReadableNativeText() {
+        verifyClassroomMaterials(exportZIP: false)
+    }
+    @MainActor private func verifyClassroomMaterials(exportZIP: Bool) {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = XCUIApplication()
+        app.launchEnvironment["SYSTEMEDU_TEST_STORE"] = UUID().uuidString
+        app.launchEnvironment["SYSTEMEDU_TEST_EXPEDITION"] = "stale-cursor"
+        app.launch(); enter(app); app.buttons["expedition-continue"].tap()
+        let web = app.webViews.firstMatch
+        XCTAssertTrue(web.buttons["动画与互动"].waitForExistence(timeout: 20))
+        XCTAssertFalse(web.buttons["讲课"].exists)
+        XCTAssertFalse(web.buttons["导出记录"].exists)
+        capture("ipad-simplified-classroom")
+        web.buttons["动画与互动"].tap()
+        let names = ["junior-guide.ipynb", "kepler10-q3-validity-input.csv"] + (exportZIP ? ["lightkurve-practice-kit.zip"] : [])
+        for name in names {
+            let link = web.links.matching(NSPredicate(format: "label == %@", name + " ↗")).firstMatch
+            XCTAssertTrue(link.waitForExistence(timeout: 10), app.debugDescription)
+            if !link.isHittable { web.swipeUp() }
+            link.tap()
+            let save = app.buttons["classroom-file-save"]
+            XCTAssertTrue(save.waitForExistence(timeout: 15), app.debugDescription)
+            XCTAssertTrue(app.navigationBars[name].exists)
+            if !name.hasSuffix("zip") {
+                let content = app.textViews["classroom-file-content"]
+                XCTAssertTrue(content.waitForExistence(timeout: 5), app.debugDescription)
+                XCTAssertTrue(content.isHittable)
+                XCTAssertTrue((content.value as? String)?.contains(name.hasSuffix("ipynb") ? "Kepler-10" : "TIME_BKJD") == true)
+                XCTAssertGreaterThan(content.frame.height, 300)
+            }
+            capture("ipad-material-" + name)
+            if name.hasSuffix("zip") {
+                save.tap()
+                let confirm = app.buttons.matching(NSPredicate(format: "label IN %@", ["Export", "Save", "Move", "存储", "保存", "导出"])).firstMatch
+                XCTAssertTrue(confirm.waitForExistence(timeout: 10), app.debugDescription)
+                XCTAssertTrue(confirm.isEnabled, app.debugDescription)
+                // Repeated tests must not replace a student's existing download.
+                let filename = app.textFields.matching(NSPredicate(format: "value == %@", "lightkurve-practice-kit")).firstMatch
+                XCTAssertTrue(filename.waitForExistence(timeout: 5), app.debugDescription)
+                filename.tap(); filename.typeText("-qa-" + UUID().uuidString.prefix(8))
+                capture("ipad-save-material-to-files")
+                confirm.tap()
+                XCTAssertTrue(save.waitForExistence(timeout: 10))
+                XCTAssertTrue(save.isHittable, app.debugDescription)
+            }
+            app.buttons["classroom-file-close"].tap()
+            XCTAssertTrue(web.buttons["关闭面板"].waitForExistence(timeout: 10))
+        }
+        web.buttons["关闭面板"].tap()
+        XCTAssertTrue(web.buttons["练习与笔记"].exists)
+    }
     @MainActor func testSingleRouteIdentityAndReturnToHome() {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = app()

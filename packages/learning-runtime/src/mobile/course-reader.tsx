@@ -33,7 +33,7 @@ export function CourseReader({ lesson, initial, onChange, onCommit, onAdvance, t
   const [workspace, setWorkspace] = useState<Record<string,string>>(() => Object.assign({}, ...Object.values((initial.frames as Record<string,Record<string,string>>) ?? {}), (initial.shared_workspace as Record<string,string>) ?? {}))
   const [workView, setWorkView] = useState('note')
   const [panel, setPanel] = useState<Panel>(null)
-  const immersive = tablet && (panel === 'lecture' || !!panel?.startsWith('lab:'))
+  const immersive = tablet && !!panel?.startsWith('lab:')
   useEffect(() => { setClassroomImmersive(immersive); return () => setClassroomImmersive(false) }, [immersive])
   const page = pages[Math.min(index, pages.length - 1)]
   const crew = useMemo(currentCrew, [])
@@ -131,7 +131,6 @@ export function CourseReader({ lesson, initial, onChange, onCommit, onAdvance, t
       </nav>
       <span className="swipe-hint">左右轻扫翻页</span>
       <div className="reader-actions">
-        <button aria-label="讲课" onClick={() => setPanel('lecture')} disabled={!slides.length}><Presentation size={21} aria-hidden="true"/><span aria-hidden="true">讲课</span></button>
         <button aria-label="练习与笔记" onClick={() => setPanel('work')} aria-expanded={panel === 'work'}><NotebookPen size={21} aria-hidden="true"/><span aria-hidden="true">笔记</span></button>
         <button aria-label="动画与互动" onClick={() => setPanel('resources')} aria-expanded={panel === 'resources'}><FlaskConical size={21} aria-hidden="true"/><span aria-hidden="true">活动</span></button>
       </div>
@@ -154,7 +153,7 @@ export function CourseReader({ lesson, initial, onChange, onCommit, onAdvance, t
       </section>
       {(theories.length > 0 || !!lesson.foundations?.length) && <section><h3>概念解释</h3>{(lesson.foundations ?? []).map(f => <details key={f.id}><summary>{f.title}</summary>{markdown(f.body_markdown)}</details>)}{theories.map(t => <button className="content-entry" key={t.theory_id} onClick={() => setPanel(`theory:${t.theory_id}`)}><BookOpen size={17}/>{t.title}</button>)}</section>}
       <section><h3>资料与下载</h3>
-        <p className="muted">外部网页、YouTube 和 Python 环境首次加载需要网络。</p>
+        <p className="muted">{tablet ? '点开资料可以查看，并可保存到「文件」。外部网页与在线环境需要网络。' : '外部网页、YouTube 和 Python 环境首次加载需要网络。'}</p>
         {lesson.lab_url && <a href={'https://systeme.xin'+lesson.lab_url}>打开本课工作台（联网） ↗</a>}
         <div className="resource-list">{resources.map((r, i) => <div key={i}><a href={resolve(r.url!)} target="_blank" rel="noreferrer">{r.title ?? r.url} ↗</a><p>{r.purpose ?? r.focus ?? r.detail}</p>{r.media_url && <video controls playsInline preload="none" src={resolve(r.media_url)} poster={r.poster_url ? resolve(r.poster_url) : undefined} style={{width:"100%"}}/>}</div>)}</div>
         {!resources.length && <p className="muted">本节资料链接保留在课文和作业原文中。</p>}
@@ -162,7 +161,7 @@ export function CourseReader({ lesson, initial, onChange, onCommit, onAdvance, t
     </Sheet>}
     {activeTheory && <Sheet docked={tablet} title={activeTheory.title} onClose={() => setPanel(null)}><TheoryBody key={activeTheory.theory_id} theory={activeTheory} render={markdown} questionPrefix={`theory:${activeTheory.theory_id}:${lesson.content_revision ?? lesson.content_version}`} answers={answers} onAnswer={(id, value) => setAnswers({ ...answers, [id]: value })}/></Sheet>}
     {activeLab && <Sheet portrait={tablet && crew ? <CrewPortrait crew={crew} size="small"/> : undefined} caption={tablet && crew ? `${crew.name}的操作席` : undefined} title={tablet || activeLab.presentation_platform === 'ios' ? activeLab.title : interactionPresentation(activeLab.mode).label} immersive={tablet || activeLab.presentation_platform === 'ios'} onClose={() => setPanel(null)}>{!tablet && activeLab.presentation_platform !== 'ios' && <h3>{activeLab.title}</h3>}{activeLab.path ? <InteractiveFrame key={activeLab.id} compactHeader={tablet} crew={mission ? crew : undefined} references={initial.reference_workspace as Record<string,string>} mobile={tablet || activeLab.presentation_platform === 'ios'} path={resolve(activeLab.path)} title={activeLab.title} storage={workspace} onStorage={setWorkspace} onCommit={commitWorkspace} moduleId={lesson.module_id} ideaId={activeLab.id}/> : null}{!activeLab.path && !activeLab.exercises.length && <p className="muted">本节尚未提供可打开的互动资源，请查看课文中的操作说明。</p>}{activeLab.exercises.length > 0 && <Questions questions={activeLab.exercises} prefix={activeLab.id} answers={answers} onAnswer={(id, answer) => setAnswers({ ...answers, [id]: answer })}/>}</Sheet>}
-    {panel === 'lecture' && <Sheet immersive={tablet} title={`讲课 · ${Math.min(slideIndex + 1, slides.length)}/${slides.length}`} onClose={() => setPanel(null)} footer={<Pager index={Math.min(slideIndex, slides.length - 1)} count={slides.length} onChange={setSlideIndex}/>}><SlideCard slide={slides[Math.min(slideIndex, slides.length - 1)]} markdown={markdown} resolve={resolve} onTheory={id => setPanel(`theory:${id}`)} onLab={id => setPanel(`lab:${id}`)}/></Sheet>}
+    {!tablet && panel === 'lecture' && <Sheet title={`讲课 · ${Math.min(slideIndex + 1, slides.length)}/${slides.length}`} onClose={() => setPanel(null)} footer={<Pager index={Math.min(slideIndex, slides.length - 1)} count={slides.length} onChange={setSlideIndex}/>}><SlideCard slide={slides[Math.min(slideIndex, slides.length - 1)]} markdown={markdown} resolve={resolve} onTheory={id => setPanel(`theory:${id}`)} onLab={id => setPanel(`lab:${id}`)}/></Sheet>}
   </div>
 }
 

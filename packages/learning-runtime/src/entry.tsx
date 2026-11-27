@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Share } from "lucide-react"
 import { createRoot } from "react-dom/client"
 import { activityFrom, browserHost, nativeHost, type Snapshot, type LearningHost } from "./host"
 import { MobileHand } from "./mobile/hand"
@@ -40,7 +39,9 @@ function Classroom({ host, initial, activity, lesson }: { host: LearningHost; in
   }, [])
   const failed = status.includes("失败")
   const saveState = failed ? "error" : status === "已保存到本机" ? "saved" : status === "正在保存…" ? "saving" : "idle"
-  const sessionTools = <div className="session-bar">{(!tablet || failed) && <span role={failed ? "alert" : "status"}>{!failed && <i/>}{status}</span>}<button aria-label="导出记录" onClick={() => { void save().then(() => host.exportState()).catch(() => setStatus("导出失败，请重试")) }}>{tablet ? <Share size={19}/> : '导出记录 ↗'}</button></div>
+  const sessionTools = tablet
+    ? (failed ? <div className="session-bar"><span role="alert">{status}</span></div> : null)
+    : <div className="session-bar"><span role={failed ? "alert" : "status"}>{!failed && <i/>}{status}</span><button aria-label="导出记录" onClick={() => { void save().then(() => host.exportState()).catch(() => setStatus("导出失败，请重试")) }}>导出记录 ↗</button></div>
   return <div data-save-state={saveState} className={tablet ? 'classroom-shell tablet-classroom' : 'classroom-shell'}>
     {!(tablet && lesson) && sessionTools}
     {activity === "course:space-exploration:1.0:JOURNEY" ? <Dossier initial={initial} onChange={change}/> : lesson ? <CourseReader sessionTools={sessionTools} tablet={tablet} lesson={lesson} initial={initial} onChange={change} onCommit={async state => { change(state); await save() }} onAdvance={host.advance}/> : activity === "mechanical-hand" ? <MobileHand initial={initial} onChange={change} assetBase={assetBase}/> :
