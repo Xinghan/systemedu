@@ -142,6 +142,7 @@ private struct ExpeditionLessonView: View {
     @State private var index = 0
     @State private var ready = false
     @State private var immersive = false
+    @State private var completedLessonTitle: String?
     @State private var error: String?
     @Environment(\.dismiss) private var dismiss
     private var nodes: [TabletMissionNode] { chapter.nodes(mission) }
@@ -154,22 +155,30 @@ private struct ExpeditionLessonView: View {
                     .accessibilityLabel("远航任务").accessibilityIdentifier("ipad-lesson-back")
                 CrewAvatar(profile: profile, size: 36)
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("\(profile.name) · \(chapter.title)").font(.system(size: 16, weight: .semibold))
-                    Text("步骤 \(index + 1) / \(nodes.count) · \(chapter.delivery.title)").font(.system(size: 12)).foregroundStyle(.white.opacity(0.6))
+                    Text(node.title).font(.system(size: 16, weight: .semibold))
+                        .accessibilityIdentifier("expedition-lesson-title")
+                    Text("\(chapter.title) · 本章第 \(index + 1) / \(nodes.count) 节").font(.system(size: 12)).foregroundStyle(.white.opacity(0.6))
+                        .accessibilityIdentifier("expedition-lesson-position")
                 }
                 Spacer(minLength: 8)
                 if index > 0 { Button("回看上一步") { move(-1) }.font(.caption).frame(minHeight: 44) }
                 Button { move(1) } label: {
-                    Label(index == nodes.count - 1 ? "整理本章作品" : "继续下一步", systemImage: "arrow.right")
+                    Label(index == nodes.count - 1 ? "整理本章作品" : "进入第 \(index + 2) 节", systemImage: "arrow.right")
                         .font(.system(size: 13, weight: .semibold)).padding(.horizontal, 18).frame(minHeight: 44)
                         .foregroundStyle(canContinue ? Color.expeditionNight : Color.white.opacity(0.48))
                         .background(canContinue ? Color.expeditionGold : Color.white.opacity(0.07), in: Capsule())
                 }.buttonStyle(.plain).disabled(!canContinue).accessibilityIdentifier("expedition-next-step")
             }.padding(.horizontal, 24).padding(.vertical, 10).background(Color.expeditionNight).foregroundStyle(.white) }
+            if !immersive, let completedLessonTitle {
+                Label("已完成「\(completedLessonTitle)」 · 已进入本章第 \(index + 1) 节", systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 13, weight: .medium)).foregroundStyle(Color.expeditionGold)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 24).padding(.vertical, 10)
+                    .background(Color.white.opacity(0.04)).accessibilityElement(children: .combine).accessibilityIdentifier("expedition-lesson-transition")
+            }
             if ready {
                 ClassroomView(activity: node.activity, store: store, crew: profile, embeddedInMission: true,
                     onOpenActivity: { _ in error = "请先完成当前步骤。所有课程节点都会沿远航路线依次展开。" }, onMissionMap: { dismiss() },
-                    missionContinueLabel: index == nodes.count - 1 ? "完成本节，整理本章作品" : "完成本节，进入下一步",
+                    missionContinueLabel: index == nodes.count - 1 ? "完成本节，整理本章作品" : "完成本节，进入「\(nodes[index + 1].title)」",
                     onAdvance: { activity in
                         guard activity == node.activity else { throw StoreError.invalidState }
                         if chapter.id == "first-contact", !canContinue { throw ExpeditionNavigationError.photoRequired }
@@ -188,6 +197,7 @@ private struct ExpeditionLessonView: View {
         guard delta < 0 || canContinue else { return }
         do {
             if delta > 0 { try advanceLesson(); return }
+            completedLessonTitle = nil
             var draft = (try store.document(story.draftKey(chapter), as: ExpeditionDraft.self)) ?? ExpeditionDraft()
             draft.lessonIndex = max(0, index + delta); try store.saveDocument(draft, key: story.draftKey(chapter)); index = draft.lessonIndex
         } catch { self.error = error.localizedDescription }
@@ -198,6 +208,7 @@ private struct ExpeditionLessonView: View {
         var draft = (try store.document(story.draftKey(chapter), as: ExpeditionDraft.self)) ?? ExpeditionDraft()
         draft.lessonIndex = index + 1
         try store.saveDocument(draft, key: story.draftKey(chapter))
+        completedLessonTitle = node.title
         immersive = false
         index = draft.lessonIndex
     }

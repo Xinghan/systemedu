@@ -466,7 +466,7 @@ final class TabletMissionTests: XCTestCase {
         app.launchEnvironment["SYSTEMEDU_TEST_EXPEDITION"] = scenario
         app.launch(); return app
     }
-    @MainActor private func finishCurrentLesson(_ app: XCUIApplication, finalStep: Bool) {
+    @MainActor private func finishCurrentLesson(_ app: XCUIApplication, finalStep: Bool, nextTitle: String? = nil) {
         let web = app.webViews.firstMatch
         let contents = web.buttons["打开课文目录"]
         XCTAssertTrue(contents.waitForExistence(timeout: 20))
@@ -484,19 +484,51 @@ final class TabletMissionTests: XCTestCase {
         let last = sections.element(boundBy: sections.count - 1)
         for _ in 0..<12 { if last.isHittable { break }; web.swipeUp() }
         XCTAssertTrue(last.isHittable, web.debugDescription); last.tap()
-        let finish = web.buttons[finalStep ? "完成本节，整理本章作品" : "完成本节，进入下一步"]
+        let finish = web.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", finalStep ? "完成本节，整理本章作品" : "完成本节，进入「")).firstMatch
         XCTAssertTrue(finish.waitForExistence(timeout: 10))
+        if finalStep { XCTAssertEqual(finish.label, "完成本节，整理本章作品") }
+        else { XCTAssertTrue(finish.label.hasPrefix("完成本节，进入「")) }
+        if let nextTitle { XCTAssertEqual(finish.label, "完成本节，进入「\(nextTitle)」") }
         for _ in 0..<12 { if finish.isHittable { break }; web.swipeUp() }
         XCTAssertTrue(finish.isHittable, web.debugDescription); finish.tap()
+    }
+    @MainActor func testEveryResearchLessonShowsItsOwnIdentityAndExplicitHandoff() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = navigationApp("stale-cursor"); enter(app)
+        app.buttons["expedition-continue"].tap()
+        let titles = ["了解 Kepler-10 的观测数据", "读懂光变曲线的时间轴与亮度轴", "选择一段可能包含亮度下降的观测", "整理第一份观测记录"]
+        for (offset, title) in titles.enumerated() {
+            let heading = app.staticTexts["expedition-lesson-title"]
+            expectation(for: NSPredicate(format: "label == %@", title), evaluatedWith: heading)
+            waitForExpectations(timeout: 20)
+            XCTAssertTrue(app.webViews.firstMatch.staticTexts[title].waitForExistence(timeout: 20))
+            XCTAssertTrue(app.staticTexts["expedition-lesson-position"].label.contains("本章第 \(offset + 2) / 5 节"))
+            XCTAssertTrue(app.webViews.firstMatch.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "本节阅读 1 /")).firstMatch.exists)
+            if offset > 0 {
+                let transition = app.descendants(matching: .any).matching(identifier: "expedition-lesson-transition").firstMatch
+                XCTAssertTrue(transition.exists)
+                XCTAssertTrue(transition.label.contains("已完成「\(titles[offset - 1])」"))
+                XCTAssertTrue(transition.label.contains("已进入本章第 \(offset + 2) 节"))
+            }
+            capture("distinct-lesson-M0\(offset + 2)")
+            if offset == 2 {
+                app.terminate(); app.launch(); enter(app); app.buttons["expedition-continue"].tap()
+                expectation(for: NSPredicate(format: "label == %@", title), evaluatedWith: heading)
+                waitForExpectations(timeout: 20)
+            }
+            finishCurrentLesson(app, finalStep: offset == titles.count - 1, nextTitle: offset + 1 < titles.count ? titles[offset + 1] : nil)
+        }
+        XCTAssertTrue(app.staticTexts["expedition-delivery-title"].waitForExistence(timeout: 15))
+        capture("research-chapter-delivery-after-fifth-lesson")
     }
     @MainActor func testCompletedLessonResumesForwardAndFinishesWithoutReturningToOldLesson() {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = navigationApp("stale-cursor"); enter(app)
         app.buttons["expedition-continue"].tap()
-        let second = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "步骤 2 / 5")).firstMatch
+        let second = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "本章第 2 / 5 节")).firstMatch
         XCTAssertTrue(second.waitForExistence(timeout: 20), app.debugDescription)
         finishCurrentLesson(app, finalStep: false)
-        let third = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "步骤 3 / 5")).firstMatch
+        let third = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "本章第 3 / 5 节")).firstMatch
         XCTAssertTrue(third.waitForExistence(timeout: 15), app.debugDescription)
         capture("completion-forward-to-third-lesson")
         app.buttons["ipad-lesson-back"].tap(); app.buttons["expedition-continue"].tap()

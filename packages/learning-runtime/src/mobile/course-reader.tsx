@@ -107,14 +107,14 @@ export function CourseReader({ lesson, initial, onChange, onCommit, onAdvance, t
   const activeTheory = panel?.startsWith('theory:') ? theories.find(t => t.theory_id === panel.slice(7) || t.aliases?.includes(panel.slice(7))) : null
   const activeLab = panel?.startsWith('lab:') ? interactions.find(t => t.id === panel.slice(4)) : null
   return <div className={`mobile-reader course-reader${tablet ? ' tablet-reader' : ''}${mission ? ' expedition-reader' : ''}${inspection ? ' has-inspector' : ''}`}>
-    <header className="reading-heading"><button onClick={() => setPanel('contents')} aria-label="打开课文目录"><List size={20}/><span>{tablet ? '阅读路径' : `${lesson.module_id} · 本节目录`}</span>{tablet && <small>{sectionIndex + 1} / {sections.length}</small>}</button>{tablet ? sessionTools : <button onClick={() => setPanel('lecture')} disabled={!slides.length}><Presentation size={17}/>讲课</button>}</header>
+    <header className="reading-heading"><button onClick={() => setPanel('contents')} aria-label="打开课文目录"><List size={20}/><span>{tablet ? '本节目录' : `${lesson.module_id} · 本节目录`}</span>{tablet && <small>阅读 {sectionIndex + 1} / {sections.length}</small>}</button>{tablet ? sessionTools : <button onClick={() => setPanel('lecture')} disabled={!slides.length}><Presentation size={17}/>讲课</button>}</header>
     {!tablet && <div className="section-progress" aria-hidden="true">{sections.map((s, i) => <span key={s} data-active={i <= sectionIndex}/>)}</div>}
     <article ref={readingSurface} className="reading-card" key={tablet ? page?.section : page?.id} data-turn={turnDirection} data-section={sectionIndex} aria-label={tablet ? `阅读第 ${sectionIndex + 1} 部分，共 ${sections.length} 部分` : `课文第 ${index + 1} 页`} tabIndex={0} onKeyDown={e => {
       if (!tablet || panel || e.target !== e.currentTarget || e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); turnSection(sectionIndex + (e.key === 'ArrowRight' ? 1 : -1)) }
     }}>
       {position && !tablet && <div className="lesson-location"><strong>{position.course}</strong><span>第 {position.number} 节，共 {position.total} 节</span>{position.stage && <span>{position.stage}</span>}</div>}
-      <p className="overline">{tablet ? `任务阅读　${String(sectionIndex + 1).padStart(2, '0')} / ${String(sections.length).padStart(2, '0')}` : page?.fields ? `逐项对照 · ${page.row} / ${page.rows}` : `阅读 · ${index + 1}`}</p>
+      <p className="overline">{tablet ? `本节阅读　${String(sectionIndex + 1).padStart(2, '0')} / ${String(sections.length).padStart(2, '0')}` : page?.fields ? `逐项对照 · ${page.row} / ${page.rows}` : `阅读 · ${index + 1}`}</p>
       {mission && sections[0] === page?.section ? <MissionTaskIntro lesson={lesson} crew={crew} entry={primaryInteraction && <InteractionEntry interaction={primaryInteraction} onOpen={() => setPanel(`lab:${primaryInteraction.id}`)}/>}/> : <h1>{page?.section ?? lesson.title}</h1>}
       {lesson.mission_brief && (tablet ? sections[0] === page?.section : index === 0) && <aside className="mission-brief">{mission && <img src={mission.commanderImage} alt="林岚指挥官"/>}<div><strong>{lesson.mission_brief.speaker}给你的任务</strong><p>{lesson.mission_brief.message}</p></div></aside>}
       {tablet ? <TabletSection pages={sectionPages} render={markdown}/> : page?.fields ? <dl className="comparison-card">{page.fields.map((field, i) => <div key={i}><dt>{markdown(field.label)}</dt><dd>{markdown(field.value || '—')}</dd></div>)}</dl> : <div className="reading-prose">{page ? markdown(page.markdown) : <p>本节暂未提供正文，可先查看作业与学习资料。</p>}</div>}
@@ -126,7 +126,7 @@ export function CourseReader({ lesson, initial, onChange, onCommit, onAdvance, t
     <div className="reader-controls">{tablet ? <>
       <nav className="tablet-page-control" aria-label="阅读翻页">
         <button aria-label="上一页" disabled={sectionIndex === 0} onClick={() => turnSection(sectionIndex - 1)}><ChevronLeft size={21}/></button>
-        <div className="page-position"><span aria-live="polite" aria-atomic="true">{sectionIndex + 1} / {sections.length}</span><div className="page-dots" aria-hidden="true">{sections.map((s, i) => <i key={s} data-current={i === sectionIndex}/>)}</div></div>
+        <div className="page-position"><span aria-live="polite" aria-atomic="true">本节阅读 {sectionIndex + 1} / {sections.length}</span><div className="page-dots" aria-hidden="true">{sections.map((s, i) => <i key={s} data-current={i === sectionIndex}/>)}</div></div>
         <button aria-label="下一页" disabled={sectionIndex >= sections.length - 1} onClick={() => turnSection(sectionIndex + 1)}><ChevronRight size={21}/></button>
       </nav>
       <span className="swipe-hint">左右轻扫翻页</span>

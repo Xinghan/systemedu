@@ -17,11 +17,11 @@ export function MissionTaskIntro({lesson, crew, entry}: {lesson: CourseLesson; c
   const mission = lesson.expedition
   if (!mission) return null
   const icons = mission.chapterId === 'first-contact' ? [Focus, ScanLine, Camera] : [Focus, ScanLine, PackageCheck]
-  return <section className="mission-task-intro" aria-label="本章任务说明">
-    <div className="mission-scene"><img src={mission.image} alt={`${mission.chapterTitle}的任务场景`}/><div><span>{mission.act} / 第 {mission.chapterNumber} 章</span><h1>{mission.chapterTitle}</h1><p>{mission.arrival}</p></div></div>
-    <div className="mission-owner"><CrewPortrait crew={crew}/><div><strong>{crew ? `${crew.name}，这是你的任务` : '这是你的任务'}</strong><p>{crew ? `${crew.role} · ${crew.duty}` : '把自己的观察和操作留在作品中'}</p></div><span className="mission-step-count">步骤 {mission.step} / {mission.total}</span></div>
-    <ol className="mission-action-steps">{mission.actions.map((text,index) => {const Icon=icons[index % icons.length];return <li key={text}><Icon size={21}/><span><small>0{index+1}</small>{text}</span></li>})}</ol>
-    <div className="mission-outcome"><Flag size={20}/><span>本章带走<strong>{mission.outcome}</strong></span></div>
+  return <section className="mission-task-intro" aria-label="本节任务说明">
+    <div className="mission-scene"><img src={mission.image} alt={`${mission.chapterTitle}的任务场景`}/><div><span>第 {mission.chapterNumber} 章 · {mission.chapterTitle}</span><h1>{lesson.title}</h1><p>{lesson.core_question || mission.arrival}</p></div></div>
+    <div className="mission-owner"><CrewPortrait crew={crew}/><div><strong>{crew ? `${crew.name}，这是你的任务` : '这是你的任务'}</strong><p>{crew ? `${crew.role} · ${crew.duty}` : '把自己的观察和操作留在作品中'}</p></div><span className="mission-step-count">本章第 {mission.step} / {mission.total} 节</span></div>
+    {mission.total > 1 && lesson.learning_output ? <div className="mission-lesson-goal"><PackageCheck size={24}/><div><strong>本节要留下</strong><p>{lesson.learning_output}</p></div></div> : <ol className="mission-action-steps">{mission.actions.map((text,index) => {const Icon=icons[index % icons.length];return <li key={text}><Icon size={21}/><span><small>0{index+1}</small>{text}</span></li>})}</ol>}
+    <div className="mission-outcome"><Flag size={20}/><span>{mission.total > 1 ? '汇入本章作品' : '本章带走'}<strong>{mission.outcome}</strong></span></div>
     {entry && <div className="mission-intro-entry">{entry}</div>}
   </section>
 }
