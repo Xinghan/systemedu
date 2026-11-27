@@ -595,6 +595,12 @@ final class TabletMissionTests: XCTestCase {
         expectation(for: NSPredicate(format: "label != %@", "已播放 0 秒"), evaluatedWith: timer)
         waitForExpectations(timeout: 10)
         capture("completion-film-auto-playing")
+        app.buttons["ipad-film-transcript"].tap()
+        let musicCredit = app.staticTexts["ipad-film-music-credit"]
+        XCTAssertTrue(musicCredit.waitForExistence(timeout: 5))
+        XCTAssertTrue(musicCredit.label.contains("PeriTune"))
+        capture("completion-film-licensed-music-credit")
+        app.buttons["收起"].tap()
         app.buttons["ipad-film-surface"].tap()
         XCTAssertTrue(close.isHittable); close.tap()
         let replay = app.buttons["expedition-replay-completion"]

@@ -76,14 +76,17 @@ def video(action):
                 for chunk in result.iter_content(1024 * 1024): stream.write(chunk)
         (WORK / 'source.download').replace(WORK / 'source.mp4')
 
-def compose():
+def compose(voice_track=None):
     from PIL import Image, ImageDraw, ImageFont
     story = json.loads((ROOT / 'packages/ios-app/content/space-expedition.json').read_text())
     chapter = next(c for c in story['chapters'] if c['id'] == 'research-P1')
     output = MEDIA / 'video'
     audio = json.loads((HERE / 'audio.json').read_text())
     talk_end = min(SECONDS, audio['speech_end'] + .8)
-    ff('-i', WORK / 'source.mp4', '-t', talk_end, '-vf', 'scale=1280:720,fps=24', '-c:v', 'libx264', '-crf', '22', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-ar', '48000', '-ac', '2', WORK / 'character.mp4')
+    inputs = ['-i', WORK / 'source.mp4']
+    if voice_track:
+        inputs += ['-i', voice_track, '-map', '0:v:0', '-map', '1:a:0']
+    ff(*inputs, '-t', talk_end, '-vf', 'scale=1280:720,fps=24', '-c:v', 'libx264', '-crf', '22', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-ar', '48000', '-ac', '2', WORK / 'character.mp4')
     ff('-loop', '1', '-i', PUBLIC / chapter['image'].lstrip('/'), '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo', '-t', '3', '-vf', 'scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps=24', '-c:v', 'libx264', '-crf', '22', '-pix_fmt', 'yuv420p', '-c:a', 'aac', WORK / 'evidence-scene.mp4')
     ff('-i', WORK / 'character.mp4', '-i', WORK / 'evidence-scene.mp4', '-filter_complex', '[0:v:0][0:a:0][1:v:0][1:a:0]concat=n=2:v=1:a=1[v][a]', '-map', '[v]', '-map', '[a]', '-c:v', 'libx264', '-crf', '22', '-c:a', 'aac', '-ar', '48000', '-movflags', '+faststart', output / (FILM_ID + '.mp4'))
     parts = [s for s in re.split('(?<=[。])', DIALOGUE) if s]

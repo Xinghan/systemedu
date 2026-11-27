@@ -145,6 +145,18 @@ struct TabletFilmView: View {
                         }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     }
                 }
+                if let credit = film.musicCredit {
+                    Divider()
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("配乐").font(.headline)
+                        Text("\(credit.title) · \(credit.artist)").accessibilityIdentifier("ipad-film-music-credit")
+                        HStack(spacing: 20) {
+                            Link("作品来源", destination: credit.sourceURL)
+                            Link("CC BY 4.0", destination: credit.licenseURL)
+                        }
+                        Text(credit.changes).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
             }.padding(20)
         }.frame(idealWidth: 390, idealHeight: 380).foregroundStyle(.primary)
     }

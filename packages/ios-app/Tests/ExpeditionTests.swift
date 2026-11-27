@@ -50,6 +50,10 @@ final class ExpeditionTests: XCTestCase {
         let story = try XCTUnwrap(Expedition.current)
         XCTAssertEqual(Set(story.completionFilms?.keys.map { $0 } ?? []), ["research-P1"])
         let film = try XCTUnwrap(story.completionFilms?["research-P1"])
+        let credit = try XCTUnwrap(film.musicCredit)
+        XCTAssertEqual(credit.artist, "PeriTune")
+        XCTAssertEqual(credit.licenseURL.absoluteString, "https://creativecommons.org/licenses/by/4.0/")
+        XCTAssertTrue(story.films.allSatisfy { $0.musicCredit == nil }, "Existing introductory films still decode without music credits")
         XCTAssertFalse(story.films.contains { $0.id == film.id }, "Completion films must not replace stage introductions")
         for path in [film.path, film.captions, try XCTUnwrap(film.poster)] {
             let url = try XCTUnwrap(TabletMission.bundledURL(path))
