@@ -4,6 +4,7 @@ import concurrent.futures
 import importlib.util
 import json
 import logging
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -104,10 +105,21 @@ def generate(ident):
     print(json.dumps({'lesson':ident,'status':'SCENES_READY'}),flush=True)
 
 def compose(ident):
-    from visuals import render
+    from visuals import render,render_insert
     folder=HERE/ident;work=WORK/ident;work.mkdir(parents=True,exist_ok=True)
+    if not (folder/'narration.wav').exists(): prepare_audio(ident)
     timeline=json.loads((folder/'timeline.json').read_text())
     render(ident,STORY[ident],timeline,folder/'teaching-motion.mp4')
+    detected=subprocess.run(['ffmpeg','-nostdin','-hide_banner','-i',str(folder/'generated-scenes.mp4'),'-vf',"select='gt(scene,0.18)',showinfo",'-an','-f','null','-'],capture_output=True,text=True,check=True)
+    cuts=[float(t) for t in re.findall(r'pts_time:([\d.]+)',detected.stderr)]
+    edit_path=folder/'data-workbench-edit.json'
+    edited=json.loads(edit_path.read_text())['cuts'] if edit_path.exists() else None
+    assert len(cuts)>=(2 if edited else 3), f'{ident}: must visually review missing scene changes before composing'
+    scene_cuts=edited or cuts
+    display_cut=next(t for t in reversed(scene_cuts) if 9<t<13)
+    render_insert(ident,15-display_cut,folder/'precision-insert.mp4')
+    # Replace the AI-generated close-up containing unreliable glyphs and axes.
+    ff('-i',folder/'generated-scenes.mp4','-i',folder/'precision-insert.mp4','-filter_complex',f'[0:v]trim=end={display_cut},setpts=PTS-STARTPTS[scene];[scene][1:v]concat=n=2:v=1:a=0[v]','-map','[v]','-t',15,'-an','-c:v','libx264','-crf',20,'-pix_fmt','yuv420p',work/'scenes-master.mp4')
     overlay=Image.new('RGBA',(1280,720));d=ImageDraw.Draw(overlay)
     d.rounded_rectangle((26,24,326,65),radius=9,fill=(2,12,23,185))
     font=ImageFont.truetype('/System/Library/Fonts/STHeiti Medium.ttc',21)
@@ -117,15 +129,15 @@ def compose(ident):
     credit='Music: Firmament_Active by PeriTune. '+CREDIT['sourceURL']+' CC BY 4.0 '+CREDIT['licenseURL']+' Changes: excerpt, normalization, ducking, fades, voiceover mix.'
     filters=f'[0:v][1:v]concat=n=2:v=1:a=0[v0];[v0][4:v]overlay=0:0:enable=\'lt(t,15)\'[v];[2:a]atrim=duration={duration_total}[voice];[3:a]atrim=duration={duration_total},asetpts=PTS-STARTPTS,loudnorm=I=-24:TP=-3:LRA=7,aresample=48000,volume=0.398,afade=t=in:d=0.7,afade=t=out:st={duration_total-1.4}:d=1.4[bg];[voice][bg]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.891:level=0[a]'
     out=MEDIA/'video'/f'lesson-{ident.lower()}-summary'
-    ff('-i',folder/'generated-scenes.mp4','-i',folder/'teaching-motion.mp4','-i',folder/'narration.wav','-i',MUSIC,'-loop',1,'-i',work/'scene-label.png','-filter_complex',filters,'-map','[v]','-map','[a]','-t',duration_total,'-c:v','libx264','-crf',21,'-pix_fmt','yuv420p','-r',24,'-c:a','aac','-b:a','192k','-ar',48000,'-movflags','+faststart','-metadata','comment='+credit,str(out)+'.mp4')
-    ff('-ss',7,'-i',str(out)+'.mp4','-frames:v',1,'-vf','scale=960:-2',str(out)+'-poster.jpg')
+    ff('-i',work/'scenes-master.mp4','-i',folder/'teaching-motion.mp4','-i',folder/'narration.wav','-i',MUSIC,'-loop',1,'-i',work/'scene-label.png','-filter_complex',filters,'-map','[v]','-map','[a]','-t',duration_total,'-c:v','libx264','-crf',21,'-pix_fmt','yuv420p','-r',24,'-c:a','aac','-b:a','192k','-ar',48000,'-movflags','+faststart','-metadata','comment='+credit,str(out)+'.mp4')
+    ff('-ss',(scene_cuts[1]+display_cut)/2,'-i',str(out)+'.mp4','-frames:v',1,'-vf','scale=960:-2',str(out)+'-poster.jpg')
     cues=['WEBVTT','']
     def timestamp(t):
         ms=round(t*1000);return f'{ms//3600000:02}:{ms//60000%60:02}:{ms//1000%60:02}.{ms%1000:03}'
     for i,cue in enumerate(timeline['cues']):cues += [str(i+1),timestamp(cue['start'])+' --> '+timestamp(cue['end']),cue['text'],'']
     cues += ['next',timestamp(timeline['cues'][-1]['end']+.1)+' --> '+timestamp(duration_total),STORY[ident]['next'],'']
     Path(str(out)+'.vtt').write_text('\n'.join(cues))
-    save(folder/'composition.json',dict(seconds=duration(str(out)+'.mp4'),ref=OLD[ident]['ref'],musicCredit=CREDIT,generated_scene_seconds=15,teaching_motion_seconds=duration_total-15,voice_source='Original approved commander voice; sentence-aligned, no speed/pitch changes'))
+    save(folder/'composition.json',dict(seconds=duration(str(out)+'.mp4'),ref=OLD[ident]['ref'],musicCredit=CREDIT,generated_scene_seconds=display_cut,detected_scene_cuts=cuts,edit_cuts=edited,precision_insert_seconds=15-display_cut,teaching_motion_seconds=duration_total-15,voice_source='Original approved commander voice; sentence-aligned, no speed/pitch changes'))
     print(json.dumps({'lesson':ident,'status':'COMPOSED','seconds':duration_total}),flush=True)
 
 if __name__=='__main__':
