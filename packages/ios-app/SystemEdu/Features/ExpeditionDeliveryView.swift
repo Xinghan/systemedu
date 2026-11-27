@@ -182,7 +182,7 @@ struct ExpeditionReceiptView: View {
                 if !handoff.isEmpty { HStack(alignment: .top, spacing: 16) { Image(systemName: "arrow.turn.down.right").font(.title2).foregroundStyle(Color.expeditionGold); Text(handoff).font(.title3).lineSpacing(6) }.padding(.vertical, 12) }
                 if let onContinue { Button(action: onContinue) { HStack { Text(nextChapterTitle.map { "进入下一章 · " + $0 } ?? "完成远航，查看总档案"); Spacer(); Image(systemName: "arrow.right") }.font(.headline).padding(20).foregroundStyle(Color.expeditionNight).background(Color.expeditionGold, in: RoundedRectangle(cornerRadius: 16)) }.buttonStyle(.plain).accessibilityIdentifier("expedition-next-chapter") }
                 Button { exportReceipt() } label: { Label("导出这份作品与原始记录", systemImage: "square.and.arrow.up") }.font(.subheadline)
-                Text("此刻的署名、作品和课堂记录已作为独立副本保存在本机。之后修改形象或笔记，不会覆盖这份交付。").font(.caption).foregroundStyle(.white.opacity(0.5)).lineSpacing(4)
+                Text("你的署名、作品和课堂记录已随本章归档。").font(.caption).foregroundStyle(.white.opacity(0.5)).lineSpacing(4)
             }.padding(32).frame(maxWidth: 900).frame(maxWidth: .infinity)
         }.background(Color.expeditionNight).foregroundStyle(.white).tint(.expeditionGold)
             .sheet(item: $preview) { FilePreview(url: $0.url) }.sheet(item: $export) { ShareSheet(url: $0.url) }

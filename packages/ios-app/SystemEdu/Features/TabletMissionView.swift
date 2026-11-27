@@ -315,17 +315,18 @@ private struct ExpeditionRouteMap: View {
                     Text("回看不会改变你的进度。完成当前节点后，下一节点会沿路线解锁。").font(.subheadline).foregroundStyle(.secondary)
                 }
                 ForEach(Array(story.chapters.enumerated()), id: \.element.id) { position, chapter in
+                    let archived = (try? store.document(story.receiptKey(chapter), as: ExpeditionReceipt.self)) != nil
                     DisclosureGroup(isExpanded: Binding(get: { expanded.contains(chapter.id) }, set: { if $0 { expanded.insert(chapter.id) } else { expanded.remove(chapter.id) } })) {
                         ForEach(Array(chapter.nodes(mission).enumerated()), id: \.element.ref) { index, node in
                             let available = story.canVisit(node, in: chapter, mission: mission, store: store)
-                            let read = mission.isRead(node, records: store.records)
+                            let read = archived || mission.isRead(node, records: store.records)
                             Button { onSelect(chapter, node) } label: {
                                 HStack(spacing: 12) {
                                     Image(systemName: node.ref == selectedRef ? "location.fill" : available ? (read ? "checkmark.circle.fill" : "play.circle") : "lock.fill")
                                         .foregroundStyle(available ? Color.expeditionGold : .secondary)
                                     VStack(alignment: .leading, spacing: 5) {
                                         Text("\(index + 1). \(node.title)").foregroundStyle(available ? .primary : .secondary)
-                                        Text(node.ref == selectedRef ? "正在查看" : read ? "已学 · 可以回看" : available ? "当前任务" : "完成前面的任务后解锁").font(.caption).foregroundStyle(.secondary)
+                                        Text(node.ref == selectedRef ? "正在查看" : !available ? "完成前面的任务后解锁" : read ? "已学 · 可以回看" : "当前任务").font(.caption).foregroundStyle(.secondary)
                                     }
                                     Spacer()
                                 }.frame(minHeight: 44)
@@ -339,7 +340,7 @@ private struct ExpeditionRouteMap: View {
                                 Text("\(chapter.refs.count) 个节点 · \(chapter.delivery.title)").font(.caption).foregroundStyle(.secondary)
                             }
                         }.padding(.vertical, 4)
-                    }.accessibilityIdentifier("expedition-route-chapter-" + chapter.id)
+                    }
                 }
             }.navigationTitle("远航任务地图").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("关闭") { dismiss() }.accessibilityIdentifier("expedition-close-map") } }

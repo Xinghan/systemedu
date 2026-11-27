@@ -312,6 +312,9 @@ final class TabletMissionTests: XCTestCase {
         let submit = app.buttons["expedition-submit"]
         if !submit.isHittable { app.swipeUp() }
         XCTAssertTrue(submit.isEnabled); capture("expedition-work-self-check"); submit.tap()
+        XCTAssertTrue(app.buttons["ipad-close-film"].waitForExistence(timeout: 15))
+        capture("first-chapter-completion-auto-playing")
+        app.buttons["ipad-close-film"].tap()
         let advance = app.buttons["expedition-next-chapter"]
         XCTAssertTrue(advance.waitForExistence(timeout: 10)); capture("expedition-signed-delivery")
         if !advance.isHittable { app.swipeUp() }; advance.tap()
@@ -323,8 +326,8 @@ final class TabletMissionTests: XCTestCase {
         app.buttons["完成"].tap(); app.buttons["expedition-continue"].tap()
         XCTAssertTrue(app.buttons["ipad-film-continue"].waitForExistence(timeout: 10)); app.buttons["ipad-film-continue"].tap()
         XCTAssertTrue(web.buttons["下一页"].waitForExistence(timeout: 20))
-        let first = web.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "任务阅读　01 / ")).firstMatch
-        let second = web.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "任务阅读　02 / ")).firstMatch
+        let first = web.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "本节阅读 1 /")).firstMatch
+        let second = web.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "本节阅读 2 /")).firstMatch
         XCTAssertTrue(first.waitForExistence(timeout: 10))
         // Touch the reading surface, not its controls: real WKWebView gesture delivery.
         func swipe(_ left: Bool) {
@@ -492,7 +495,10 @@ final class TabletMissionTests: XCTestCase {
         let locked = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND enabled == false", "expedition-route-")).firstMatch
         XCTAssertTrue(locked.waitForExistence(timeout: 10), app.debugDescription)
         capture("review-map-keeps-future-nodes-locked")
-        app.buttons["expedition-close-map"].tap()
+        app.buttons["expedition-route-lightkurve-transit-detective:M02"].tap()
+        expectation(for: NSPredicate(format: "label == %@", "了解 Kepler-10 的观测数据"), evaluatedWith: heading)
+        waitForExpectations(timeout: 15)
+        app.buttons["expedition-previous-lesson"].tap()
         app.buttons["ipad-lesson-back"].tap()
         app.buttons["expedition-continue"].tap()
         expectation(for: NSPredicate(format: "label == %@", "了解 Kepler-10 的观测数据"), evaluatedWith: heading)
@@ -508,6 +514,27 @@ final class TabletMissionTests: XCTestCase {
         app.buttons["expedition-route-map"].tap()
         app.buttons["expedition-close-map"].tap()
         XCTAssertEqual(app.staticTexts["expedition-chapter-title"].label, "星光为什么变暗了")
+    }
+    @MainActor func testMapEntryPlaysFirstBriefingAndLessonCanReplayFilms() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = app(); enter(app); join(app)
+        app.buttons["expedition-route-map"].tap()
+        let node = app.buttons["expedition-route-spot-a-world:M01"]
+        XCTAssertTrue(node.waitForExistence(timeout: 10)); node.tap()
+        XCTAssertTrue(app.buttons["ipad-close-film"].waitForExistence(timeout: 10), "Map entry must keep the first chapter briefing")
+        app.buttons["ipad-close-film"].tap()
+        app.buttons["expedition-continue"].tap()
+        let heading = app.staticTexts["expedition-lesson-title"]
+        XCTAssertTrue(heading.waitForExistence(timeout: 15))
+        let original = heading.label
+        for title in ["项目介绍", "本章开场"] {
+            app.buttons["expedition-lesson-films"].tap()
+            app.buttons[title].tap()
+            XCTAssertTrue(app.buttons["ipad-close-film"].waitForExistence(timeout: 10))
+            app.buttons["ipad-close-film"].tap()
+            XCTAssertTrue(heading.waitForExistence(timeout: 10)); XCTAssertEqual(heading.label, original)
+        }
+        capture("lesson-contextual-film-replay")
     }
     @MainActor private func finishCurrentLesson(_ app: XCUIApplication, finalStep: Bool, nextTitle: String? = nil) {
         let web = app.webViews.firstMatch
@@ -598,10 +625,11 @@ final class TabletMissionTests: XCTestCase {
             let submit = app.buttons["expedition-submit"]
             for _ in 0..<12 { if submit.isHittable { break }; app.swipeUp() }
             XCTAssertTrue(submit.isEnabled, title); submit.tap()
-            if index == 0 {
-                XCTAssertTrue(app.buttons["ipad-close-film"].waitForExistence(timeout: 15))
-                app.buttons["ipad-close-film"].tap()
-            }
+            XCTAssertTrue(app.buttons["ipad-close-film"].waitForExistence(timeout: 15), title + " must automatically present its own closing")
+            if index + 1 < chapters.count { XCTAssertTrue(app.buttons["ipad-film-continue"].label.contains(chapters[index + 1])) }
+            else { XCTAssertTrue(app.buttons["ipad-film-continue"].label.contains("完成远航")) }
+            if [0, 5, 12].contains(index) { capture("chapter-\(index + 2)-closing-video") }
+            app.buttons["ipad-close-film"].tap()
             let next = app.buttons["expedition-next-chapter"]
             XCTAssertTrue(next.waitForExistence(timeout: 15), title)
             for _ in 0..<12 { if next.isHittable { break }; app.swipeUp() }

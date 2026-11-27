@@ -12,4 +12,4 @@
 4. Produce task-specific commander dialogue and dynamic character films for the confirmed batch, reuse the approved voice and licensed music, validate subtitles/media and exact node coverage. Do not present placeholder/static clips as completed films.
 5. Run focused native and simulator navigation tests, inspect screenshots, record node mapping and verification. Commit only this task's explicit paths and push the current branch, verifying the remote SHA.
 
-Status: navigation UI test passed; native regression and 13 closing films in progress. Existing unrelated workspace changes are excluded.
+Status: complete. All 28 chapter films and the separate project opening are bundled. Native checks passed (13, plus one unrelated live-avatar skip). Actual map selection, replay, all 14 chapter handoffs, first-chapter capture, touch paging and note restoration passed on iPad Air 11-inch (M4). Media decode, audio peaks, subtitles, contact sheets and 120 unchanged node mappings verified. See `artifacts/space-expedition-20261127/chapter-film-pairs/verification.json`.

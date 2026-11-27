@@ -48,7 +48,22 @@ final class ExpeditionTests: XCTestCase {
     }
     func testCompletionSampleHasBundledMediaAndLegacyStoryStillDecodes() throws {
         let story = try XCTUnwrap(Expedition.current)
-        XCTAssertEqual(Set(story.completionFilms?.keys.map { $0 } ?? []), ["research-P1"])
+        XCTAssertEqual(Set(story.completionFilms?.keys.map { $0 } ?? []), Set(story.chapters.map(\.id)))
+        var paths: Set<String> = []
+        for chapter in story.chapters {
+            let introduction = try XCTUnwrap(story.films.first { $0.id == chapter.filmId })
+            let closing = try XCTUnwrap(story.completionFilms?[chapter.id])
+            for film in [introduction, closing] {
+                XCTAssertTrue(paths.insert(film.path).inserted, "Each chapter needs its own film, not a shared placeholder")
+                for path in [film.path, film.captions, try XCTUnwrap(film.poster)] {
+                    let url = try XCTUnwrap(TabletMission.bundledURL(path))
+                    XCTAssertGreaterThan(try Data(contentsOf: url).count, 0)
+                }
+                XCTAssertGreaterThan(FilmCaption.load(film.captions).count, 1)
+            }
+            XCTAssertEqual(closing.musicCredit?.artist, "PeriTune")
+        }
+        XCTAssertEqual(paths.count, 28)
         let film = try XCTUnwrap(story.completionFilms?["research-P1"])
         let credit = try XCTUnwrap(film.musicCredit)
         XCTAssertEqual(credit.artist, "PeriTune")
