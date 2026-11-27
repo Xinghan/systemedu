@@ -37,6 +37,7 @@ private struct ExpeditionJourneyView: View {
     @State private var continueAfterFilm = false
     @State private var filmIntent: ExpeditionFilmIntent = .replay
     @State private var path: [ExpeditionRoute] = []
+    @State private var classroomSession = UUID()
     @State private var routeMap = false
     @State private var selectedReview: (ExpeditionChapter, TabletMissionNode)?
     @State private var error: String?
@@ -63,19 +64,27 @@ private struct ExpeditionJourneyView: View {
                     if let chapter = story.chapters.first(where: { $0.id == destination.chapterID }), let profile {
                         switch destination {
                         case .work:
-                            ExpeditionDeliveryView(story: story, chapter: chapter, mission: mission, profile: profile, store: store) { saved in
+                            ExpeditionDeliveryView(story: story, chapter: chapter, mission: mission, profile: profile, store: store,
+                                onBack: { returnFromDelivery(chapter) }) { saved in
                                 receipt = saved; path = []
                             }.id(destination)
                         case .lesson(_, let ref):
-                            ExpeditionLessonView(story: story, chapter: chapter, mission: mission, profile: profile, store: store, initialRef: ref,
+                            ExpeditionLessonView(story: story, chapter: chapter, mission: mission, profile: profile, store: store, initialRef: ref, classroomSession: classroomSession,
                                 onOpenNode: openNode) {
                                     if (try? store.document(story.receiptKey(chapter), as: ExpeditionReceipt.self)) != nil { path = [] }
-                                    else { path = [.work(chapter: chapter.id)] }
+                                    else { openDelivery(chapter) }
                                 }.id(destination)
                         }
                     }
                 }
         }.tint(.expeditionGold).preferredColorScheme(.dark)
+            .onChange(of: path) { previous, current in
+                if case .work(let from)? = previous.last, case .lesson(let to, _)? = current.last, from == to {
+                    // A returned classroom restores its saved page in a fresh bridge session.
+                    // Keep the departing WebView's once-only advance guard intact.
+                    classroomSession = UUID()
+                }
+            }
             .task { do { profile = try store.document(CrewProfile.key); loaded = true } catch { self.error = error.localizedDescription } }
             .fullScreenCover(isPresented: $editProfile) {
                 NavigationStack {
@@ -145,10 +154,28 @@ private struct ExpeditionJourneyView: View {
         } catch { self.error = error.localizedDescription }
     }
     private func advance(_ chapter: ExpeditionChapter, draft: ExpeditionDraft, allRead: Bool) {
-        if allRead { path = [.work(chapter: chapter.id)] }
+        if allRead { openDelivery(chapter) }
         else if !draft.briefingSeen, let briefing = story.films.first(where: { $0.id == chapter.filmId }) {
             filmIntent = .chapter(chapter.id, nil); film = briefing
         } else { path = [.lesson(chapter: chapter.id, node: nil)] }
+    }
+    private func openDelivery(_ chapter: ExpeditionChapter) {
+        let delivery = ExpeditionRoute.work(chapter: chapter.id)
+        guard path.last != delivery else { return }
+        if case .lesson(let id, _)? = path.last, id == chapter.id {
+            path.append(delivery)
+        } else {
+            // Direct entry after a restart must also have a real lesson to return to.
+            path = [.lesson(chapter: chapter.id, node: chapter.refs.last), delivery]
+        }
+    }
+    private func returnFromDelivery(_ chapter: ExpeditionChapter) {
+        if path.last == .work(chapter: chapter.id), path.count > 1,
+           case .lesson(let id, _) = path[path.count - 2], id == chapter.id {
+            path.removeLast()
+        } else {
+            path = [.lesson(chapter: chapter.id, node: chapter.refs.last)]
+        }
     }
     private var filmContinueTitle: String {
         switch filmIntent { case .chapter: return "进入任务"; case .opening, .replay: return "返回任务中心" }
@@ -187,6 +214,7 @@ private struct ExpeditionLessonView: View {
     let profile: CrewProfile
     @ObservedObject var store: LearningStore
     let initialRef: String?
+    let classroomSession: UUID
     let onOpenNode: (ExpeditionChapter, TabletMissionNode) -> Void
     let onDelivery: () -> Void
     @State private var index = 0
@@ -248,7 +276,7 @@ private struct ExpeditionLessonView: View {
                         guard activity == node.activity else { throw StoreError.invalidState }
                         if chapter.id == "first-contact", !canContinue { throw ExpeditionNavigationError.photoRequired }
                         try advanceLesson()
-                    }, onImmersiveChange: { immersive = $0 }).id(node.activityId)
+                    }, onImmersiveChange: { immersive = $0 }).id(node.activityId + ":" + classroomSession.uuidString)
             }
         }.background(Color.expeditionNight).navigationBarBackButtonHidden().toolbar(.hidden, for: .navigationBar)
             .task {

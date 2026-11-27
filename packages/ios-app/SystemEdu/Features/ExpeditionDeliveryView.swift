@@ -8,6 +8,7 @@ struct ExpeditionDeliveryView: View {
     let mission: TabletMission
     let profile: CrewProfile
     @ObservedObject var store: LearningStore
+    let onBack: () -> Void
     let onSubmit: (ExpeditionReceipt) -> Void
     @State private var draft = ExpeditionDraft()
     @State private var ready = false
@@ -78,6 +79,15 @@ struct ExpeditionDeliveryView: View {
             }.padding(30).frame(maxWidth: 900).frame(maxWidth: .infinity)
         }.background(Color.expeditionNight).foregroundStyle(.white).tint(.expeditionGold)
             .navigationTitle("本章作品").navigationBarTitleDisplayMode(.inline).toolbar(.visible, for: .navigationBar)
+            .navigationBarBackButtonHidden()
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(action: returnToLesson) {
+                        HStack(spacing: 8) { Image(systemName: "chevron.left"); Text("返回上一节") }.fixedSize()
+                    }
+                        .accessibilityIdentifier("expedition-delivery-back")
+                }
+            }
             .task { load() }
             .fileImporter(isPresented: $importing, allowedContentTypes: [.data], allowsMultipleSelection: false) { result in
                 do {
@@ -92,6 +102,12 @@ struct ExpeditionDeliveryView: View {
             }
             .sheet(item: $preview) { FilePreview(url: $0.url) }
             .alert("作品提示", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("知道了") {} } message: { Text(error ?? "") }
+    }
+    private func returnToLesson() {
+        do {
+            if ready { try store.saveDocument(draft, key: story.draftKey(chapter)) }
+            onBack()
+        } catch { self.error = error.localizedDescription }
     }
     private func load() {
         do {

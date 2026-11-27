@@ -469,6 +469,51 @@ final class TabletMissionTests: XCTestCase {
         app.launchEnvironment["SYSTEMEDU_TEST_EXPEDITION"] = scenario
         app.launch(); return app
     }
+    @MainActor func testDeliveryBackReturnsToTheLessonInsteadOfLoopingThroughHome() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = navigationApp("chapter-endings"); enter(app)
+        app.buttons["expedition-continue"].tap()
+        let heading = app.staticTexts["expedition-lesson-title"]
+        XCTAssertTrue(heading.waitForExistence(timeout: 20))
+        let lessonTitle = heading.label
+        finishCurrentLesson(app, finalStep: true)
+        XCTAssertTrue(app.staticTexts["expedition-delivery-title"].waitForExistence(timeout: 15))
+        let textField = app.textFields["evidence-note-question"]
+        let note = textField.exists ? textField : app.textViews["evidence-note-question"]
+        XCTAssertTrue(note.waitForExistence(timeout: 10))
+        if !note.isHittable { app.swipeUp() }
+        note.tap(); note.typeText(" Return keeps this draft.")
+        let back = app.buttons["expedition-delivery-back"]
+        XCTAssertTrue(back.isHittable, "Incomplete work and the keyboard must not block return")
+        XCTAssertTrue(back.staticTexts["返回上一节"].isHittable, "Show the return destination instead of collapsing it to an icon")
+        capture("delivery-before-return")
+        back.tap()
+        XCTAssertTrue(heading.waitForExistence(timeout: 10), "Returning from the work form must restore the actual lesson, not the home page that reopens the form")
+        XCTAssertEqual(heading.label, lessonTitle)
+        XCTAssertTrue(app.staticTexts["expedition-lesson-position"].label.contains("本章第 5 / 5 节"))
+        let finish = app.webViews.firstMatch.buttons["完成本节，整理本章作品"]
+        XCTAssertTrue(finish.waitForExistence(timeout: 20), "Return must restore the saved final reading page")
+        capture("delivery-returned-to-final-lesson")
+        finish.tap() // Exercise the WebView bridge again, not just the native continue button.
+        XCTAssertTrue(app.staticTexts["expedition-delivery-title"].waitForExistence(timeout: 15))
+        XCTAssertTrue((note.value as? String)?.contains("Return keeps this draft.") == true)
+        XCTAssertFalse(app.buttons["expedition-submit"].isEnabled, "Returning never submits incomplete work")
+        app.terminate(); app.launch(); enter(app)
+        XCTAssertEqual(app.staticTexts["expedition-chapter-title"].label, "星光为什么变暗了")
+        app.buttons["expedition-continue"].tap() // All lessons read: home enters the work form directly.
+        XCTAssertTrue(back.waitForExistence(timeout: 15))
+        XCTAssertTrue((note.value as? String)?.contains("Return keeps this draft.") == true)
+        XCUIDevice.shared.orientation = .portrait
+        XCTAssertTrue(back.isHittable); back.tap()
+        XCTAssertTrue(heading.waitForExistence(timeout: 15)); XCTAssertEqual(heading.label, lessonTitle)
+        XCTAssertTrue(finish.waitForExistence(timeout: 20))
+        app.buttons["expedition-previous-lesson"].tap()
+        expectation(for: NSPredicate(format: "label CONTAINS %@", "本章第 4 / 5 节"), evaluatedWith: app.staticTexts["expedition-lesson-position"])
+        waitForExpectations(timeout: 10)
+        XCTAssertTrue(app.webViews.firstMatch.buttons["打开课文目录"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.webViews.firstMatch.staticTexts["选择一段可能包含亮度下降的观测"].waitForExistence(timeout: 20))
+        capture("delivery-return-can-review-earlier-nodes")
+    }
     @MainActor func testProjectFilmReplayAndPersistentReviewNavigation() {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = navigationApp("stale-cursor"); enter(app)
