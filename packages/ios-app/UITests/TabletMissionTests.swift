@@ -466,6 +466,49 @@ final class TabletMissionTests: XCTestCase {
         app.launchEnvironment["SYSTEMEDU_TEST_EXPEDITION"] = scenario
         app.launch(); return app
     }
+    @MainActor func testProjectFilmReplayAndPersistentReviewNavigation() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = navigationApp("stale-cursor"); enter(app)
+        app.buttons["expedition-project-film"].tap()
+        XCTAssertTrue(app.buttons["ipad-close-film"].waitForExistence(timeout: 10))
+        capture("project-introduction-replay")
+        app.buttons["ipad-close-film"].tap()
+        app.buttons["expedition-continue"].tap()
+        let heading = app.staticTexts["expedition-lesson-title"]
+        XCTAssertTrue(heading.waitForExistence(timeout: 20))
+        XCTAssertEqual(heading.label, "了解 Kepler-10 的观测数据")
+        let web = app.webViews.firstMatch
+        XCTAssertTrue(web.buttons["动画与互动"].waitForExistence(timeout: 20))
+        web.buttons["动画与互动"].tap()
+        XCTAssertTrue(app.buttons["ipad-lesson-back"].isHittable, "Immersive presentation must retain a native escape")
+        XCTAssertTrue(app.buttons["expedition-lesson-map"].isHittable)
+        capture("persistent-navigation-over-immersive-classroom")
+        web.buttons["关闭面板"].tap()
+        app.buttons["expedition-previous-lesson"].tap()
+        expectation(for: NSPredicate(format: "label != %@", "了解 Kepler-10 的观测数据"), evaluatedWith: heading)
+        waitForExpectations(timeout: 10)
+        XCTAssertTrue(app.staticTexts["expedition-lesson-position"].label.contains("本章第 1 / 5 节"))
+        app.buttons["expedition-lesson-map"].tap()
+        let locked = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND enabled == false", "expedition-route-")).firstMatch
+        XCTAssertTrue(locked.waitForExistence(timeout: 10), app.debugDescription)
+        capture("review-map-keeps-future-nodes-locked")
+        app.buttons["expedition-close-map"].tap()
+        app.buttons["ipad-lesson-back"].tap()
+        app.buttons["expedition-continue"].tap()
+        expectation(for: NSPredicate(format: "label == %@", "了解 Kepler-10 的观测数据"), evaluatedWith: heading)
+        waitForExpectations(timeout: 15)
+        XCUIDevice.shared.orientation = .portrait
+        expectation(for: NSPredicate { _, _ in app.windows.firstMatch.frame.height > app.windows.firstMatch.frame.width && web.buttons["练习与笔记"].isHittable }, evaluatedWith: app)
+        waitForExpectations(timeout: 15)
+        Thread.sleep(forTimeInterval: 1) // Wait for the rotation compositor before taking a screenshot.
+        XCTAssertTrue(app.buttons["ipad-lesson-back"].isHittable)
+        XCTAssertTrue(app.buttons["expedition-lesson-map"].isHittable)
+        capture("persistent-navigation-portrait")
+        app.buttons["ipad-lesson-back"].tap()
+        app.buttons["expedition-route-map"].tap()
+        app.buttons["expedition-close-map"].tap()
+        XCTAssertEqual(app.staticTexts["expedition-chapter-title"].label, "星光为什么变暗了")
+    }
     @MainActor private func finishCurrentLesson(_ app: XCUIApplication, finalStep: Bool, nextTitle: String? = nil) {
         let web = app.webViews.firstMatch
         let contents = web.buttons["打开课文目录"]
@@ -611,8 +654,8 @@ final class TabletMissionTests: XCTestCase {
         replay.tap(); XCTAssertTrue(close.waitForExistence(timeout: 10))
         XCUIDevice.shared.orientation = .portrait
         let next = app.buttons["ipad-film-continue"]
-        expectation(for: NSPredicate(format: "label == %@", "继续远航"), evaluatedWith: next)
-        waitForExpectations(timeout: 25)
+        expectation(for: NSPredicate(format: "label CONTAINS %@", "进入「整理来自望远镜的数据」"), evaluatedWith: next)
+        waitForExpectations(timeout: 10)
         XCTAssertTrue(next.isHittable); XCTAssertTrue(close.isHittable)
         capture("completion-film-finished-portrait")
         next.tap()

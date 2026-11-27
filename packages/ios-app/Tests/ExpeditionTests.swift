@@ -86,6 +86,27 @@ final class ExpeditionTests: XCTestCase {
         XCTAssertEqual(try reopened.document(CrewProfile.key, as: CrewProfile.self), profile)
         XCTAssertNil(try LearningStore(url: url, owner: "other").document(CrewProfile.key, as: CrewProfile.self))
     }
+    func testReviewAccessPreservesProgressAndLocksFutureNodes() throws {
+        let (store, url) = try database(); defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let story = try XCTUnwrap(Expedition.current), mission = try XCTUnwrap(TabletMission.current)
+        let first = story.chapters[0], research = story.chapters[1]
+        XCTAssertTrue(story.canVisit(first.nodes(mission)[0], in: first, mission: mission, store: store))
+        XCTAssertFalse(story.canVisit(research.nodes(mission)[0], in: research, mission: mission, store: store))
+        let receipt = ExpeditionReceipt(storyId: story.id, chapterId: first.id, title: first.delivery.title, profile: CrewProfile(name: "回看测试", role: story.roles[0], avatar: nil), work: ExpeditionDraft(), sources: [], submittedAt: Date(), reviewStatus: "test")
+        try store.saveDocument(receipt, key: story.receiptKey(first), immutable: true)
+        let nodes = research.nodes(mission)
+        var state: [String: Any] = ["self_completed": true, "note": "keep this"]
+        if let revision = ContentCatalog.current?.courses.first(where: { nodes[0].activityId.hasPrefix("course:\($0.id):") })?.contentRevision { state["content_revision"] = revision }
+        try store.save(nodes[0].activity, state: state)
+        let before = try JSONSerialization.data(withJSONObject: store.load(nodes[0].activity)!, options: [.sortedKeys])
+        XCTAssertTrue(story.canVisit(nodes[0], in: research, mission: mission, store: store))
+        XCTAssertTrue(story.canVisit(nodes[1], in: research, mission: mission, store: store))
+        XCTAssertFalse(story.canVisit(nodes[2], in: research, mission: mission, store: store))
+        XCTAssertTrue(story.canVisit(first.nodes(mission)[0], in: first, mission: mission, store: store))
+        XCTAssertEqual(research.resumeLessonIndex(mission: mission, store: store), 1)
+        XCTAssertEqual(try JSONSerialization.data(withJSONObject: store.load(nodes[0].activity)!, options: [.sortedKeys]), before)
+        XCTAssertEqual(try store.document(story.receiptKey(first), as: ExpeditionReceipt.self)?.id, receipt.id)
+    }
     func testLegacyCrewProfileStillDecodesWithoutFullBodyFields() throws {
         let profile = CrewProfile(name: "原队员", role: try XCTUnwrap(Expedition.current?.roles.first), avatar: Data("old portrait".utf8))
         var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(profile)) as? [String: Any])

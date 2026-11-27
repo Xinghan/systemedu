@@ -150,6 +150,7 @@ struct ExpeditionReceiptView: View {
     let onContinue: (() -> Void)?
     var completionFilm: TabletFilm? = nil
     var autoPlayCompletion = false
+    var nextChapterTitle: String? = nil
     @State private var preview: SharedFile?
     @State private var export: SharedFile?
     @State private var error: String?
@@ -179,7 +180,7 @@ struct ExpeditionReceiptView: View {
                 ForEach(receipt.work.explanations.keys.sorted(), id: \.self) { key in Text(receipt.work.explanations[key] ?? "").lineSpacing(5).padding(20).frame(maxWidth: .infinity, alignment: .leading).background(Color.expeditionPanel, in: RoundedRectangle(cornerRadius: 16)) }
                 Text(receipt.reviewStatus).font(.caption).foregroundStyle(.white.opacity(0.65))
                 if !handoff.isEmpty { HStack(alignment: .top, spacing: 16) { Image(systemName: "arrow.turn.down.right").font(.title2).foregroundStyle(Color.expeditionGold); Text(handoff).font(.title3).lineSpacing(6) }.padding(.vertical, 12) }
-                if let onContinue { Button(action: onContinue) { HStack { Text("带着成果，继续远航"); Spacer(); Image(systemName: "arrow.right") }.font(.headline).padding(20).foregroundStyle(Color.expeditionNight).background(Color.expeditionGold, in: RoundedRectangle(cornerRadius: 16)) }.buttonStyle(.plain).accessibilityIdentifier("expedition-next-chapter") }
+                if let onContinue { Button(action: onContinue) { HStack { Text(nextChapterTitle.map { "进入下一章 · " + $0 } ?? "完成远航，查看总档案"); Spacer(); Image(systemName: "arrow.right") }.font(.headline).padding(20).foregroundStyle(Color.expeditionNight).background(Color.expeditionGold, in: RoundedRectangle(cornerRadius: 16)) }.buttonStyle(.plain).accessibilityIdentifier("expedition-next-chapter") }
                 Button { exportReceipt() } label: { Label("导出这份作品与原始记录", systemImage: "square.and.arrow.up") }.font(.subheadline)
                 Text("此刻的署名、作品和课堂记录已作为独立副本保存在本机。之后修改形象或笔记，不会覆盖这份交付。").font(.caption).foregroundStyle(.white.opacity(0.5)).lineSpacing(4)
             }.padding(32).frame(maxWidth: 900).frame(maxWidth: .infinity)
@@ -197,7 +198,7 @@ struct ExpeditionReceiptView: View {
             .fullScreenCover(item: $presentedFilm, onDismiss: {
                 if continueAfterFilm { continueAfterFilm = false; onContinue?() }
             }) { film in
-                TabletFilmView(film: film, continueTitle: onContinue == nil ? "返回作品" : "继续远航",
+                TabletFilmView(film: film, continueTitle: onContinue == nil ? "返回作品" : (nextChapterTitle.map { "进入「" + $0 + "」" } ?? "完成远航"),
                     context: "\(receipt.profile.name) · 「\(receipt.title)」已归档 · \(receipt.work.artifacts.count) 份材料") {
                         continueAfterFilm = onContinue != nil
                     }

@@ -25,6 +25,13 @@ struct Expedition: Decodable {
     }
     func receiptKey(_ chapter: ExpeditionChapter) -> String { "\(id):receipt:\(chapter.id)" }
     func draftKey(_ chapter: ExpeditionChapter) -> String { "\(id):draft:\(chapter.id)" }
+    // Review is a view selection, never a mutation of the completion cursor.
+    @MainActor func canVisit(_ node: TabletMissionNode, in chapter: ExpeditionChapter, mission: TabletMission, store: LearningStore) -> Bool {
+        if (try? store.document(receiptKey(chapter), as: ExpeditionReceipt.self)) != nil { return true }
+        guard currentChapter(store: store)?.id == chapter.id,
+              let index = chapter.refs.firstIndex(of: node.ref) else { return false }
+        return index <= chapter.resumeLessonIndex(mission: mission, store: store)
+    }
 }
 struct ExpeditionOverview: Decodable {
     let question: String; let summary: String; let boundary: String

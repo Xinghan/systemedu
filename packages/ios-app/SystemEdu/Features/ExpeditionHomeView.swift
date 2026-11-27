@@ -8,6 +8,8 @@ struct ExpeditionHomeView: View {
     let completed: Int
     let actionTitle: String
     var onOpenProfile: () -> Void = {}
+    var onReviewChapter: (ExpeditionChapter) -> Void = { _ in }
+    var onReplayBriefing: () -> Void = {}
     let onContinue: () -> Void
     private var current: Int { story.chapters.firstIndex { $0.id == chapter.id } ?? 0 }
     var body: some View {
@@ -15,11 +17,13 @@ struct ExpeditionHomeView: View {
             VStack(alignment: .leading, spacing: 26) {
                 introduction
                 currentTask
+                Button(action: onReplayBriefing) { Label("重看本章任务简报", systemImage: "play.circle").frame(minHeight: 44) }
+                    .accessibilityIdentifier("expedition-chapter-film")
                 if let overview = story.overview {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack { Label("远航任务地图", systemImage: "map").font(.title2.bold()); Spacer(); Text("\(completed) / \(story.chapters.count) 章已入档").font(.subheadline).foregroundStyle(Color.expeditionGold) }
                         Text("从观测到研究，再把判断变成行动。每一站带走成果，才进入下一站。").font(.subheadline).foregroundStyle(.white.opacity(0.7))
-                        Text("标着「现在出发」的卡片可以进入当前任务。").font(.caption).foregroundStyle(.white.opacity(0.6))
+                        Text("从「现在出发」继续任务，也可以点开已入档章节回看。").font(.caption).foregroundStyle(.white.opacity(0.6))
                     }.accessibilityIdentifier("expedition-map-introduction")
                     ForEach(Array(overview.acts.enumerated()), id: \.element.id) { index, act in
                         VStack(alignment: .leading, spacing: 16) {
@@ -35,6 +39,8 @@ struct ExpeditionHomeView: View {
                                     if item.id == chapter.id {
                                         Button(action: onContinue) { mapCard(item) }.buttonStyle(.plain)
                                             .accessibilityLabel("进入当前任务：" + item.title).accessibilityIdentifier("expedition-map-current")
+                                    } else if (story.chapters.firstIndex { $0.id == item.id } ?? 0) < current {
+                                        Button { onReviewChapter(item) } label: { mapCard(item) }.buttonStyle(.plain).accessibilityLabel("回看：" + item.title).accessibilityIdentifier("expedition-review-" + item.id)
                                     } else { mapCard(item).accessibilityElement(children: .combine).accessibilityIdentifier("expedition-stop-" + item.id) }
                                 }
                             }
