@@ -64,7 +64,8 @@ private struct ExpeditionJourneyView: View {
                     if let chapter = story.chapters.first(where: { $0.id == destination.chapterID }), let profile {
                         switch destination {
                         case .work:
-                            ExpeditionDeliveryView(story: story, chapter: chapter, mission: mission, profile: profile, store: store, completionFilm: story.completionFilms?[chapter.id],
+                            ExpeditionDeliveryView(story: story, chapter: chapter, mission: mission, profile: profile, store: store,
+                                completionFilm: chapter.refs.last.flatMap { story.lessonCompletionFilms?[$0] } ?? story.completionFilms?[chapter.id],
                                 onBack: { returnFromDelivery(chapter) }) { saved in
                                 receipt = saved; path = []
                             }.id(destination)
@@ -207,6 +208,13 @@ private struct ExpeditionJourneyView: View {
     }
 }
 
+private struct ExpeditionLessonFilm: Identifiable {
+    let film: TabletFilm
+    let continueTitle: String
+    let context: String?
+    var id: String { film.id }
+}
+
 private struct ExpeditionLessonView: View {
     let story: Expedition
     let chapter: ExpeditionChapter
@@ -227,7 +235,7 @@ private struct ExpeditionLessonView: View {
     @Environment(\.dismiss) private var dismiss
     private var nodes: [TabletMissionNode] { chapter.nodes(mission) }
     private var node: TabletMissionNode { nodes[min(index, nodes.count - 1)] }
-    @State private var replayFilm: TabletFilm?
+    @State private var presentedFilm: ExpeditionLessonFilm?
     private var canContinue: Bool { chapter.id == "first-contact" ? chapter.isReadyForDelivery(mission: mission, store: store) : mission.isRead(node, records: store.records) }
     private var archived: Bool { (try? store.document(story.receiptKey(chapter), as: ExpeditionReceipt.self)) != nil }
     var body: some View {
@@ -243,9 +251,10 @@ private struct ExpeditionLessonView: View {
                 }
                 Spacer(minLength: 8)
                 Menu {
-                    Button("项目介绍") { replayFilm = story.films.first { $0.id == story.openingFilmId } }
-                    Button("本章开场") { replayFilm = story.films.first { $0.id == chapter.filmId } }
-                    if archived, let closing = story.completionFilms?[chapter.id] { Button("本章收尾") { replayFilm = closing } }
+                    Button("项目介绍") { replay(story.films.first { $0.id == story.openingFilmId }) }
+                    Button("本章开场") { replay(story.films.first { $0.id == chapter.filmId }) }
+                    if let summary = story.lessonCompletionFilms?[node.ref] { Button("本节总结") { replay(summary) } }
+                    if archived, let closing = story.completionFilms?[chapter.id] { Button("本章收尾") { replay(closing) } }
                 } label: { Image(systemName: "play.rectangle").frame(width: 44, height: 44) }.accessibilityLabel("介绍与收尾视频").accessibilityIdentifier("expedition-lesson-films")
                 Button { routeMap = true } label: { Label("任务地图", systemImage: "map").font(.subheadline).frame(minHeight: 44) }.accessibilityIdentifier("expedition-lesson-map")
                 if previousNode != nil {
@@ -295,7 +304,9 @@ private struct ExpeditionLessonView: View {
             }) {
                 ExpeditionRouteMap(story: story, mission: mission, store: store, selectedRef: node.ref) { owner, target in selectedReview = (owner, target); routeMap = false }
             }
-            .fullScreenCover(item: $replayFilm) { TabletFilmView(film: $0, continueTitle: "返回本节", onContinue: {}) }
+            .fullScreenCover(item: $presentedFilm) { presentation in
+                TabletFilmView(film: presentation.film, continueTitle: presentation.continueTitle, context: presentation.context, onContinue: {})
+            }
             .alert("任务提示", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("知道了") {} } message: { Text(error ?? "") }
     }
     private var previousNode: (ExpeditionChapter, TabletMissionNode)? {
@@ -320,12 +331,23 @@ private struct ExpeditionLessonView: View {
     private func advanceLesson() throws {
         guard canContinue else { throw StoreError.invalidState }
         if index + 1 >= nodes.count { onDelivery(); return }
+        let completed = node
         var draft = (try store.document(story.draftKey(chapter), as: ExpeditionDraft.self)) ?? ExpeditionDraft()
         draft.lessonIndex = index + 1
         try store.saveDocument(draft, key: story.draftKey(chapter))
         completedLessonTitle = node.title
         immersive = false
         index = draft.lessonIndex
+        if let summary = story.lessonCompletionFilms?[completed.ref] {
+            // Progress is saved once above. Closing, skipping or replaying the film
+            // must never perform a second advance or undo the completed lesson.
+            presentedFilm = ExpeditionLessonFilm(film: summary, continueTitle: "进入「\(node.title)」",
+                context: "\(profile.name) · \(completed.title) · 本节回顾")
+        }
+    }
+    private func replay(_ film: TabletFilm?) {
+        guard let film else { return }
+        presentedFilm = ExpeditionLessonFilm(film: film, continueTitle: "返回本节", context: nil)
     }
 }
 private struct ExpeditionRouteMap: View {

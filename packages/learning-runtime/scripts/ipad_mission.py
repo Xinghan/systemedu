@@ -100,6 +100,11 @@ def export_expedition(repo, out, mission, asset):
             raise ValueError('Completion film must belong to an existing chapter')
         for key in ['path', 'captions', 'poster']:
             film[key] = asset(film[key])
+    for ref, film in story.get('lessonCompletionFilms', {}).items():
+        if ref not in expected:
+            raise ValueError('Lesson completion film must belong to an existing node')
+        for key in ['path', 'captions', 'poster']:
+            film[key] = asset(film[key])
     (out / 'content/missions/space-expedition.json').write_text(json.dumps(story, ensure_ascii=False, separators=(',', ':')))
     # Presentation context is additive; retain source lessons, media, IDs and versions verbatim.
     catalog = json.loads((out / 'content/catalog.json').read_text())

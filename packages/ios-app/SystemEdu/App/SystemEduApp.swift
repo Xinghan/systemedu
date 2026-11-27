@@ -43,7 +43,7 @@ struct SystemEduApp: App {
     // Only the UUID-isolated UI-test database can receive these synthetic records.
     // Relaunches keep the test's saved progress; the real student database is untouched.
     private static func seedNavigationFixture(_ store: LearningStore, scenario: String) throws {
-        guard ["stale-cursor", "chapter-endings"].contains(scenario),
+        guard ["stale-cursor", "chapter-endings", "lesson-summaries"].contains(scenario),
               try store.document(CrewProfile.key, as: CrewProfile.self) == nil,
               let story = Expedition.current, let mission = TabletMission.current else { return }
         let profile = CrewProfile(name: "Navigation QA", role: story.roles[0], avatar: nil)
@@ -53,7 +53,7 @@ struct SystemEduApp: App {
             work: ExpeditionDraft(), sources: [], submittedAt: Date(), reviewStatus: "Synthetic navigation fixture"), key: story.receiptKey(first), immutable: true)
         for chapter in story.chapters.dropFirst() {
             let nodes = chapter.nodes(mission)
-            let completed = scenario == "chapter-endings" ? Array(nodes.dropLast()) : (chapter.id == story.chapters[1].id ? Array(nodes.prefix(1)) : [])
+            let completed = scenario == "chapter-endings" ? Array(nodes.dropLast()) : (scenario == "stale-cursor" && chapter.id == story.chapters[1].id ? Array(nodes.prefix(1)) : [])
             for node in completed {
                 var state: [String: Any] = ["self_completed": true, "note": "Synthetic navigation fixture"]
                 if let revision = ContentCatalog.current?.courses.first(where: { node.activityId.hasPrefix("course:\($0.id):") })?.contentRevision { state["content_revision"] = revision }
@@ -62,7 +62,7 @@ struct SystemEduApp: App {
             var draft = ExpeditionDraft(); draft.briefingSeen = true
             // Deliberately stale: resumption must use actual completion, not this cursor.
             draft.lessonIndex = 0
-            if scenario == "chapter-endings" {
+            if scenario == "chapter-endings" || scenario == "lesson-summaries" {
                 for requirement in chapter.delivery.evidence {
                     try draft.add(ExpeditionArtifact(requirement: requirement.id, filename: "navigation-fixture.txt",
                         data: Data("Synthetic UI navigation evidence, not student work".utf8), origin: "ui-test-fixture", createdAt: Date()))

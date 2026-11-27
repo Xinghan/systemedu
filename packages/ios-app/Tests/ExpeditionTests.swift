@@ -108,6 +108,34 @@ final class ExpeditionTests: XCTestCase {
         XCTAssertEqual(try reopened.document(CrewProfile.key, as: CrewProfile.self), profile)
         XCTAssertNil(try LearningStore(url: url, owner: "other").document(CrewProfile.key, as: CrewProfile.self))
     }
+    func testFiveLessonSummariesCoverOnlyTheRequestedChapterAndRemainOptional() throws {
+        let story = try XCTUnwrap(Expedition.current)
+        let chapter = try XCTUnwrap(story.chapters.first { $0.id == "research-P1" })
+        let films = try XCTUnwrap(story.lessonCompletionFilms)
+        XCTAssertEqual(Set(films.keys), Set(chapter.refs))
+        XCTAssertEqual(films.count, 5)
+        XCTAssertEqual(Set(films.values.map(\.path)).count, 5)
+        for (index, ref) in chapter.refs.enumerated() {
+            let film = try XCTUnwrap(films[ref])
+            XCTAssertTrue(film.title.hasPrefix("第 \(index + 1) 节总结"))
+            XCTAssertNil(film.summaryStart)
+            XCTAssertEqual(film.musicCredit?.artist, "PeriTune")
+            for path in [film.path, film.captions, try XCTUnwrap(film.poster)] {
+                let url = try XCTUnwrap(TabletMission.bundledURL(path))
+                XCTAssertGreaterThan(try Data(contentsOf: url).count, 0)
+            }
+            let captions = FilmCaption.load(film.captions)
+            XCTAssertGreaterThan(captions.count, 2)
+            XCTAssertFalse(captions.contains { $0.text.contains("已归档") || $0.text.contains("已经归档") })
+        }
+        let source = try XCTUnwrap(TabletMission.bundledURL("/content/missions/space-expedition.json"))
+        var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: source)) as? [String: Any])
+        legacy.removeValue(forKey: "lessonCompletionFilms")
+        let decoded = try JSONDecoder().decode(Expedition.self, from: JSONSerialization.data(withJSONObject: legacy))
+        XCTAssertNil(decoded.lessonCompletionFilms)
+        XCTAssertEqual(decoded.chapters.flatMap(\.refs), story.chapters.flatMap(\.refs))
+        XCTAssertEqual(decoded.completionFilms?.count, 14)
+    }
     func testReviewAccessPreservesProgressAndLocksFutureNodes() throws {
         let (store, url) = try database(); defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
         let story = try XCTUnwrap(Expedition.current), mission = try XCTUnwrap(TabletMission.current)

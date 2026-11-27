@@ -34,7 +34,9 @@ struct ExpeditionDeliveryView: View {
                     }
                 }
                 if let completionFilm {
-                    Button { presentedFilm = completionFilm } label: { Label("重看本章总结", systemImage: "play.rectangle.fill") }
+                    Button { presentedFilm = completionFilm } label: {
+                        Label(completionFilm.id == story.lessonCompletionFilms?[chapter.refs.last ?? ""]?.id ? "重看本节总结" : "重看本章总结", systemImage: "play.rectangle.fill")
+                    }
                         .buttonStyle(.bordered).accessibilityIdentifier("expedition-replay-summary")
                 }
                 ForEach(chapter.delivery.evidence) { item in
