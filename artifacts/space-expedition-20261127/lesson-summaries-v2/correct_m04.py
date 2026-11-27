@@ -40,7 +40,11 @@ with g._without_proxy_env():
     original=WORK/'initial-scenes.mp4'
     if not original.exists():shutil.copy2(HERE/'generated-scenes.mp4',original)
     # Use each generated shot at its original speed; trim its ending, never rush the hands.
-    filters='[0:v]trim=end=2.416667,setpts=PTS-STARTPTS[a];[1:v]trim=start=0:end=4.083333,setpts=PTS-STARTPTS,fps=24[b];[1:v]trim=start=5:end=9.083333,setpts=PTS-STARTPTS,fps=24[c];[0:v]trim=start=10.583333:end=15,setpts=PTS-STARTPTS[d];[a][b][c][d]concat=n=4:v=1:a=0[v]'
+    # The generated margins contain invented numeric ticks. Reframe inside the plot:
+    # keep the animated selection/hands, exclude both unreliable numeric margins.
+    # Exact quantities and axes appear only in the separately authored teaching shot.
+    reframe='crop=840:472:250:0,scale=1280:720,setsar=1'
+    filters=f'[0:v]trim=end=2.416667,setpts=PTS-STARTPTS[a];[1:v]trim=start=0:end=4.083333,setpts=PTS-STARTPTS,fps=24,{reframe}[b];[1:v]trim=start=5:end=9.083333,setpts=PTS-STARTPTS,fps=24,{reframe}[c];[0:v]trim=start=10.583333:end=15,setpts=PTS-STARTPTS[d];[a][b][c][d]concat=n=4:v=1:a=0[v]'
     g.ff('-i',original,'-i',source,'-filter_complex',filters,'-map','[v]','-an','-t',15,'-c:v','libx264','-crf',20,'-pix_fmt','yuv420p',HERE/'generated-scenes.mp4')
-    g.save(HERE/'data-workbench-edit.json',{'cuts':[2.416667,6.5,10.583333],'source':'data-workbench-source.mp4','segments':[[0,4.083333],[5,9.083333]],'note':'The two workbench shots have similar colors; use explicit edit boundaries as well as scene detection.'})
+    g.save(HERE/'data-workbench-edit.json',{'cuts':[2.416667,6.5,10.583333],'source':'data-workbench-source.mp4','segments':[[0,4.083333],[5,9.083333]],'reframe':reframe,'note':'Crop out unreliable generated numeric margins while preserving animated hands and selection. The two workbench shots have similar colors; use explicit edit boundaries as well as scene detection.'})
     print('M04 corrected scene reel ready for visual review.',flush=True)

@@ -724,6 +724,30 @@ final class TabletMissionTests: XCTestCase {
             let timer = app.staticTexts["ipad-film-time"]
             expectation(for: NSPredicate(format: "label != %@", "已播放 0 秒"), evaluatedWith: timer)
             waitForExpectations(timeout: 10)
+            // Inspect the actual task scenes and teaching animation, not just the shared host intro.
+            let playback = app.buttons["ipad-film-play"]
+            if playback.label == "暂停" { playback.tap() }
+            let progress = app.sliders["播放进度"]
+            progress.adjust(toNormalizedSliderPosition: 0.04)
+            expectation(for: NSPredicate { _, _ in
+                let seconds = Int(timer.label.filter(\.isNumber)) ?? -1
+                return (0...2).contains(seconds)
+            }, evaluatedWith: timer)
+            waitForExpectations(timeout: 5)
+            capture("lesson-summary-commander-M0\(index + 1)")
+            progress.adjust(toNormalizedSliderPosition: 0.28)
+            expectation(for: NSPredicate { _, _ in
+                let seconds = Int(timer.label.filter(\.isNumber)) ?? -1
+                return (7...10).contains(seconds)
+            }, evaluatedWith: timer)
+            waitForExpectations(timeout: 5)
+            capture("lesson-summary-scenes-M0\(index + 1)")
+            progress.adjust(toNormalizedSliderPosition: 0.7)
+            expectation(for: NSPredicate { _, _ in
+                let seconds = Int(timer.label.filter(\.isNumber)) ?? -1
+                return (19...23).contains(seconds)
+            }, evaluatedWith: timer)
+            waitForExpectations(timeout: 5)
             let proceed = app.buttons["ipad-film-continue"]
             XCTAssertTrue(proceed.label.contains(index == 4 ? "整理本章作品" : "进入「\(titles[index + 1])」"))
             if index == 2 { XCUIDevice.shared.orientation = .portrait }
@@ -786,7 +810,7 @@ final class TabletMissionTests: XCTestCase {
         if subtitles.value as? String == "关闭" { subtitles.tap() }
         let progress = app.sliders["播放进度"]
         progress.adjust(toNormalizedSliderPosition: 0.06)
-        expectation(for: NSPredicate(format: "label == %@", "队员，把来源、图和研究问题放进观察卡，分清观察与猜测。"), evaluatedWith: app.staticTexts["ipad-film-caption"])
+        expectation(for: NSPredicate(format: "label == %@", "队员，我们来整理观察卡。"), evaluatedWith: app.staticTexts["ipad-film-caption"])
         waitForExpectations(timeout: 5)
         app.buttons["ipad-film-surface"].tap()
         XCTAssertTrue(close.isHittable); close.tap()
