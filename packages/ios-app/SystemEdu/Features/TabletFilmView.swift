@@ -25,6 +25,8 @@ struct TabletFilmView: View {
     let film: TabletFilm
     let captions: [FilmCaption]
     var onContinue: (() -> Void)?
+    var continueTitle: String
+    var context: String?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("systemedu.ipad.chinese-film-captions") private var hasCaptions = true
@@ -38,8 +40,10 @@ struct TabletFilmView: View {
     @State private var controlsVisible = true
     @State private var transcript = false
 
-    init(film: TabletFilm, onContinue: (() -> Void)? = nil) {
+    init(film: TabletFilm, continueTitle: String = "进入任务", context: String? = nil, onContinue: (() -> Void)? = nil) {
         self.onContinue = onContinue
+        self.continueTitle = continueTitle
+        self.context = context
         self.film = film
         self.captions = FilmCaption.load(film.captions)
     }
@@ -66,7 +70,10 @@ struct TabletFilmView: View {
                     HStack(spacing: 16) {
                         Button { dismiss() } label: { Label("退出视频", systemImage: "xmark").frame(minHeight: 44) }
                             .accessibilityLabel("关闭简报").accessibilityIdentifier("ipad-close-film")
-                        Text(film.title).font(.headline).lineLimit(1)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(film.title).font(.headline).lineLimit(1)
+                            if let context { Text(context).font(.caption).foregroundStyle(.white.opacity(0.75)).lineLimit(2) }
+                        }
                         Spacer()
                         if !captions.isEmpty {
                             Button { hasCaptions.toggle() } label: {
@@ -78,7 +85,7 @@ struct TabletFilmView: View {
                                 .popover(isPresented: $transcript) { transcriptView }
                         }
                         if let onContinue {
-                            Button(finished ? "进入任务" : "跳过视频，进入任务") { onContinue(); dismiss() }
+                            Button(finished ? continueTitle : "跳过视频，" + continueTitle) { onContinue(); dismiss() }
                                 .font(.headline).padding(.horizontal, 18).frame(minHeight: 44)
                                 .background(Color.expeditionGold, in: Capsule()).foregroundStyle(Color.expeditionNight)
                                 .accessibilityIdentifier("ipad-film-continue")

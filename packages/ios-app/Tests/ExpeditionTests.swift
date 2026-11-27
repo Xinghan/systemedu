@@ -46,6 +46,27 @@ final class ExpeditionTests: XCTestCase {
         XCTAssertFalse(script.contains("localStorage"))
         XCTAssertEqual(CrewClassroomIdentity.payload(CrewProfile(name: "新队员", role: role, avatar: nil))["avatar"], role.characterImagePath)
     }
+    func testCompletionSampleHasBundledMediaAndLegacyStoryStillDecodes() throws {
+        let story = try XCTUnwrap(Expedition.current)
+        XCTAssertEqual(Set(story.completionFilms?.keys.map { $0 } ?? []), ["research-P1"])
+        let film = try XCTUnwrap(story.completionFilms?["research-P1"])
+        XCTAssertFalse(story.films.contains { $0.id == film.id }, "Completion films must not replace stage introductions")
+        for path in [film.path, film.captions, try XCTUnwrap(film.poster)] {
+            let url = try XCTUnwrap(TabletMission.bundledURL(path))
+            XCTAssertGreaterThan(try Data(contentsOf: url).count, 0)
+        }
+        let captions = FilmCaption.load(film.captions)
+        XCTAssertGreaterThan(captions.count, 2)
+        XCTAssertTrue(captions.contains { $0.text.contains("星光调查卡") })
+        XCTAssertTrue(captions.contains { $0.text.contains("检查观测数据") })
+        let source = try XCTUnwrap(TabletMission.bundledURL("/content/missions/space-expedition.json"))
+        var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: source)) as? [String: Any])
+        legacy.removeValue(forKey: "completionFilms")
+        let decoded = try JSONDecoder().decode(Expedition.self, from: JSONSerialization.data(withJSONObject: legacy))
+        XCTAssertNil(decoded.completionFilms)
+        XCTAssertEqual(decoded.chapters.flatMap(\.refs), story.chapters.flatMap(\.refs))
+        XCTAssertEqual(decoded.films.count, 15)
+    }
     func testIdentityChangesDoNotResetLearningAndDocumentsStayOwnerScoped() throws {
         let (store, url) = try database(); defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
         let story = try XCTUnwrap(Expedition.current)

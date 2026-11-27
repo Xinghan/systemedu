@@ -38,7 +38,8 @@ private struct ExpeditionJourneyView: View {
                 if loaded {
                     if profile == nil { CrewIdentityView(story: story, onConfirm: saveProfile) }
                     else if let receipt {
-                        ExpeditionReceiptView(receipt: receipt, handoff: story.chapters.first { $0.id == receipt.chapterId }?.handoff ?? "", onContinue: { self.receipt = nil })
+                        ExpeditionReceiptView(receipt: receipt, handoff: story.chapters.first { $0.id == receipt.chapterId }?.handoff ?? "", onContinue: { self.receipt = nil },
+                            completionFilm: story.completionFilms?[receipt.chapterId], autoPlayCompletion: true)
                     } else if let chapter { chapterHome(chapter) }
                     else { finish }
                 } else { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
@@ -68,7 +69,7 @@ private struct ExpeditionJourneyView: View {
             .sheet(isPresented: $archive) {
                 NavigationStack {
                     List(receipts) { receipt in
-                        NavigationLink { ExpeditionReceiptView(receipt: receipt, handoff: "", onContinue: nil) } label: {
+                        NavigationLink { ExpeditionReceiptView(receipt: receipt, handoff: "", onContinue: nil, completionFilm: story.completionFilms?[receipt.chapterId]) } label: {
                             HStack { CrewAvatar(profile: receipt.profile); VStack(alignment: .leading, spacing: 5) { Text(receipt.title); Text("\(receipt.profile.name) · \(receipt.work.artifacts.count) 份材料").font(.caption).foregroundStyle(.secondary) } }
                         }
                     }.navigationTitle("我的远航作品")

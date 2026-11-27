@@ -148,9 +148,14 @@ struct ExpeditionReceiptView: View {
     let receipt: ExpeditionReceipt
     let handoff: String
     let onContinue: (() -> Void)?
+    var completionFilm: TabletFilm? = nil
+    var autoPlayCompletion = false
     @State private var preview: SharedFile?
     @State private var export: SharedFile?
     @State private var error: String?
+    @State private var presentedFilm: TabletFilm?
+    @State private var autoPlayStarted = false
+    @State private var continueAfterFilm = false
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
@@ -162,6 +167,10 @@ struct ExpeditionReceiptView: View {
                         Text("\(receipt.profile.name) · \(receipt.profile.role.title)").font(.title3)
                         Text(receipt.submittedAt, format: .dateTime.year().month().day().hour().minute()).font(.caption).foregroundStyle(.white.opacity(0.5))
                     }
+                }
+                if let completionFilm {
+                    Button { presentedFilm = completionFilm } label: { Label("重看林岚的阶段回信", systemImage: "play.rectangle.fill") }
+                        .buttonStyle(.bordered).accessibilityIdentifier("expedition-replay-completion")
                 }
                 ForEach(receipt.work.artifacts) { artifact in
                     ExpeditionArtifactCard(artifact: artifact) { do { preview = SharedFile(url: try artifact.previewURL()) } catch { self.error = error.localizedDescription } }
@@ -176,6 +185,23 @@ struct ExpeditionReceiptView: View {
             }.padding(32).frame(maxWidth: 900).frame(maxWidth: .infinity)
         }.background(Color.expeditionNight).foregroundStyle(.white).tint(.expeditionGold)
             .sheet(item: $preview) { FilePreview(url: $0.url) }.sheet(item: $export) { ShareSheet(url: $0.url) }
+            .task(id: receipt.id) {
+                guard autoPlayCompletion, !autoPlayStarted, let completionFilm else { return }
+                // Let the completed delivery screen finish returning to the receipt before presenting.
+                do { try await Task.sleep(for: .milliseconds(400)) } catch { return }
+                // Navigation can cancel and restart this task. Only consume autoplay when presenting.
+                guard !Task.isCancelled, !autoPlayStarted else { return }
+                autoPlayStarted = true
+                presentedFilm = completionFilm
+            }
+            .fullScreenCover(item: $presentedFilm, onDismiss: {
+                if continueAfterFilm { continueAfterFilm = false; onContinue?() }
+            }) { film in
+                TabletFilmView(film: film, continueTitle: onContinue == nil ? "返回作品" : "继续远航",
+                    context: "\(receipt.profile.name) · 「\(receipt.title)」已归档 · \(receipt.work.artifacts.count) 份材料") {
+                        continueAfterFilm = onContinue != nil
+                    }
+            }
             .alert("作品提示", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("知道了") {} } message: { Text(error ?? "") }
     }
     private func exportReceipt() {

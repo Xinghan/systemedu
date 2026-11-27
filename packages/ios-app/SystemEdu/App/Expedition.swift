@@ -13,6 +13,7 @@ struct Expedition: Decodable {
     let roles: [ExpeditionRole]
     let chapters: [ExpeditionChapter]
     let films: [TabletFilm]
+    let completionFilms: [String: TabletFilm]?
     let overview: ExpeditionOverview?
     static let current: Self? = {
         guard let url = TabletMission.bundledURL("/content/missions/space-expedition.json"),

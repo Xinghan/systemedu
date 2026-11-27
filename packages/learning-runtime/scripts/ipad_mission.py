@@ -95,6 +95,11 @@ def export_expedition(repo, out, mission, asset):
                            captions=asset(f'/mission/space/expedition-v2/video/{ident}.vtt'),
                            poster=asset(f'/mission/space/expedition-v2/video/{ident}-poster.jpg'))
                       for ident, title, description in items]
+    for chapter_id, film in story.get('completionFilms', {}).items():
+        if chapter_id not in {chapter['id'] for chapter in story['chapters']}:
+            raise ValueError('Completion film must belong to an existing chapter')
+        for key in ['path', 'captions', 'poster']:
+            film[key] = asset(film[key])
     (out / 'content/missions/space-expedition.json').write_text(json.dumps(story, ensure_ascii=False, separators=(',', ':')))
     # Presentation context is additive; retain source lessons, media, IDs and versions verbatim.
     catalog = json.loads((out / 'content/catalog.json').read_text())

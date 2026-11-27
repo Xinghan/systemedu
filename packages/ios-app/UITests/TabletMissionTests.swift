@@ -555,6 +555,10 @@ final class TabletMissionTests: XCTestCase {
             let submit = app.buttons["expedition-submit"]
             for _ in 0..<12 { if submit.isHittable { break }; app.swipeUp() }
             XCTAssertTrue(submit.isEnabled, title); submit.tap()
+            if index == 0 {
+                XCTAssertTrue(app.buttons["ipad-close-film"].waitForExistence(timeout: 15))
+                app.buttons["ipad-close-film"].tap()
+            }
             let next = app.buttons["expedition-next-chapter"]
             XCTAssertTrue(next.waitForExistence(timeout: 15), title)
             for _ in 0..<12 { if next.isHittable { break }; app.swipeUp() }
@@ -565,6 +569,62 @@ final class TabletMissionTests: XCTestCase {
         XCTAssertTrue(finished.waitForExistence(timeout: 15)); capture("all-chapters-finished")
         app.terminate(); app.launch(); enter(app)
         XCTAssertTrue(finished.waitForExistence(timeout: 15))
+    }
+
+    @MainActor func testCompletionFilmAutomaticallyPlaysClosesReplaysAndAdvancesOnce() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = navigationApp("chapter-endings"); enter(app)
+        app.buttons["expedition-continue"].tap()
+        finishCurrentLesson(app, finalStep: true)
+        XCTAssertTrue(app.staticTexts["expedition-delivery-title"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons["ipad-close-film"].exists, "Reading alone has not submitted the chapter")
+        let checks = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "evidence-check-"))
+        for i in 0..<checks.count {
+            let check = app.buttons["evidence-check-\(i)"]
+            for _ in 0..<12 { if check.isHittable { break }; app.swipeUp() }
+            check.tap()
+        }
+        let submit = app.buttons["expedition-submit"]
+        for _ in 0..<12 { if submit.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(submit.isEnabled); submit.tap()
+        let close = app.buttons["ipad-close-film"]
+        XCTAssertTrue(close.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["林岚的阶段回信"].exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Navigation QA · 「星光调查卡」已归档")).firstMatch.exists)
+        let timer = app.staticTexts["ipad-film-time"]
+        expectation(for: NSPredicate(format: "label != %@", "已播放 0 秒"), evaluatedWith: timer)
+        waitForExpectations(timeout: 10)
+        capture("completion-film-auto-playing")
+        app.buttons["ipad-film-surface"].tap()
+        XCTAssertTrue(close.isHittable); close.tap()
+        let replay = app.buttons["expedition-replay-completion"]
+        XCTAssertTrue(replay.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["这一章，你有了自己的成果"].exists)
+        XCTAssertFalse(close.exists)
+        capture("completion-film-closed-receipt")
+        replay.tap(); XCTAssertTrue(close.waitForExistence(timeout: 10))
+        XCUIDevice.shared.orientation = .portrait
+        let next = app.buttons["ipad-film-continue"]
+        expectation(for: NSPredicate(format: "label == %@", "继续远航"), evaluatedWith: next)
+        waitForExpectations(timeout: 25)
+        XCTAssertTrue(next.isHittable); XCTAssertTrue(close.isHittable)
+        capture("completion-film-finished-portrait")
+        next.tap()
+        let chapter = app.staticTexts["expedition-chapter-title"]
+        XCTAssertTrue(chapter.waitForExistence(timeout: 15))
+        XCTAssertEqual(chapter.label, "整理来自望远镜的数据")
+        app.terminate(); app.launch(); enter(app)
+        XCTAssertTrue(chapter.waitForExistence(timeout: 15))
+        XCTAssertEqual(chapter.label, "整理来自望远镜的数据")
+        XCTAssertFalse(close.exists)
+        app.buttons["expedition-archive"].tap()
+        app.staticTexts["星光调查卡"].tap()
+        XCTAssertTrue(replay.waitForExistence(timeout: 10))
+        XCTAssertFalse(close.exists, "Opening an archived receipt does not replay automatically")
+        replay.tap(); XCTAssertTrue(close.waitForExistence(timeout: 10))
+        XCTAssertTrue(next.label.contains("返回作品")); next.tap()
+        XCTAssertTrue(replay.waitForExistence(timeout: 10))
+        capture("completion-film-archive-replay")
     }
 
     @MainActor func testCurrentMapCardContinuesTheOnlyUnlockedChapter() {
