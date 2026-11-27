@@ -55,8 +55,10 @@ struct CrewProfile: Codable, Equatable {
     var name: String
     var role: ExpeditionRole
     var avatar: Data?
+    var avatarThumbnail: Data? = nil
+    var avatarFraming: String? = nil
     var updatedAt = Date()
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.name == rhs.name && lhs.role.id == rhs.role.id && lhs.avatar == rhs.avatar }
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.name == rhs.name && lhs.role.id == rhs.role.id && lhs.avatar == rhs.avatar && lhs.avatarThumbnail == rhs.avatarThumbnail && lhs.avatarFraming == rhs.avatarFraming }
 }
 struct ExpeditionArtifact: Codable, Identifiable {
     var id = UUID().uuidString

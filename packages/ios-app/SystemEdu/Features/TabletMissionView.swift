@@ -57,10 +57,12 @@ private struct ExpeditionJourneyView: View {
                 }
         }.tint(.expeditionGold).preferredColorScheme(.dark)
             .task { do { profile = try store.document(CrewProfile.key); loaded = true } catch { self.error = error.localizedDescription } }
-            .sheet(isPresented: $editProfile) {
-                NavigationStack { CrewIdentityView(story: story, existing: profile, onConfirm: saveProfile)
-                    .navigationTitle("队员身份").navigationBarTitleDisplayMode(.inline)
-                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { editProfile = false } } } }
+            .fullScreenCover(isPresented: $editProfile) {
+                NavigationStack {
+                    if let profile {
+                        CrewProfileView(profile: profile, story: story, chapter: chapter, completed: receipts.count, onSave: saveProfile)
+                    }
+                }
                     .preferredColorScheme(.dark)
             }
             .sheet(isPresented: $archive) {
@@ -96,7 +98,7 @@ private struct ExpeditionJourneyView: View {
         return Group {
             if let profile {
                 ExpeditionHomeView(story: story, mission: mission, chapter: chapter, profile: profile, completed: receipts.count,
-                    actionTitle: allRead ? "收好本章作品" : (draft.briefingSeen ? "继续当前任务" : "听林岚交代任务")) {
+                    actionTitle: allRead ? "收好本章作品" : (draft.briefingSeen ? "继续当前任务" : "听林岚交代任务"), onOpenProfile: { editProfile = true }) {
                         advance(chapter, draft: draft, allRead: allRead)
                     }.id(chapter.id)
             }

@@ -14,6 +14,16 @@ struct SystemEduApp: App {
             let value = try LearningStore(url: url)
             #if DEBUG && targetEnvironment(simulator)
             if url.lastPathComponent.hasPrefix("uitest-"),
+               let encoded = ProcessInfo.processInfo.environment["SYSTEMEDU_TEST_CREW_IMAGE"], encoded.count < 250_000,
+               let data = Data(base64Encoded: encoded), let clean = CrewImage.jpeg(data),
+               try value.document(CrewProfile.key, as: CrewProfile.self) == nil,
+               let role = Expedition.current?.roles.first {
+                let fullBody = ProcessInfo.processInfo.environment["SYSTEMEDU_TEST_CREW_FRAMING"] == "full-body-v1"
+                try value.saveDocument(CrewProfile(name: "Portrait QA", role: role, avatar: clean,
+                    avatarThumbnail: fullBody ? CrewImage.faceThumbnail(clean) : nil,
+                    avatarFraming: fullBody ? "full-body-v1" : nil), key: CrewProfile.key)
+            }
+            if url.lastPathComponent.hasPrefix("uitest-"),
                let scenario = ProcessInfo.processInfo.environment["SYSTEMEDU_TEST_EXPEDITION"] {
                 try Self.seedNavigationFixture(value, scenario: scenario)
             }

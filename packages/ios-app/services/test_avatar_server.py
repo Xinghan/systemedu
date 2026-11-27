@@ -2,7 +2,7 @@ import io
 import time
 import unittest
 from PIL import Image
-from avatar_server import Jobs, clean_image
+from avatar_server import Jobs, clean_image, FRAMING
 
 class AvatarTests(unittest.TestCase):
     def test_strips_metadata_and_bounds_dimensions(self):
@@ -23,5 +23,17 @@ class AvatarTests(unittest.TestCase):
         jobs.remove(key); jobs.pool.shutdown(wait=True)
         self.assertIsNone(jobs.get(key)); self.assertEqual(len(calls), 1)
         with self.assertRaises(ValueError): jobs.start('../bad', b'photo')
+
+    def test_portrait_aspect_and_ready_contract(self):
+        image = Image.new('RGB', (1024, 1536), 'navy')
+        data = io.BytesIO(); image.save(data, 'PNG')
+        clean = clean_image(data.getvalue())
+        with Image.open(io.BytesIO(clean)) as portrait:
+            self.assertEqual(portrait.size, (683, 1024))
+        jobs = Jobs(lambda _: clean); key = 'c' * 32
+        jobs.start(key, b'synthetic fixture'); jobs.pool.shutdown(wait=True)
+        self.assertEqual(jobs.get(key)['status'], 'ready')
+        self.assertEqual(jobs.get(key)['framing'], FRAMING)
+        jobs.remove(key); self.assertIsNone(jobs.get(key))
 
 if __name__ == '__main__': unittest.main()

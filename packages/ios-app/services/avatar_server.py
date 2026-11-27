@@ -19,9 +19,14 @@ from camera_bridge import CameraSessions, handle_camera
 PORT = 8769
 MAX_BODY = 9_000_000
 Image.MAX_IMAGE_PIXELS = 24_000_000
-PROMPT = ('将参考照片中的一人设计为原创日式太空科幻动画队员头像。只保留原照实际可见的发型和脸形特征，不添加原照没有的眼镜或配饰，'
-          '保持原来的年龄感，不成人化。正面半身肖像、友好自然表情、海军蓝与象牙白太空科研制服、'
-          '铜色小星徽、无武器，干净的二维赛璐璐动画线条，浅蓝纯色背景。不要文字、水印或其他人物。')
+FRAMING = 'full-body-v1'
+OUTPUT_SIZE = '1024*1536'
+PROMPT = ('以参考照片或卡通肖像中的同一个人为主角，设计原创日式太空科幻动画队员的全身立绘。'
+          '保留参考图实际可见的脸型、发型、发色和眼镜特征，不凭空添加配饰，保持原来的年龄感，不成人化。'
+          '必须是从头顶到鞋底的完整全身：头发、双手、双腿、两只鞋全部在画面内；头顶和鞋底各留约8%的背景边距。'
+          '单人站立，正面略微侧身，双臂自然放松，友好自然表情。海军蓝与象牙白太空科研连体制服、铜色小星徽、完整长裤与短靴。'
+          '以科研制服补全参考图未展示的身体，比例自然，不夸大身体特征。清晰精致的二维赛璐璐动画线条与柔和阴影，浅蓝纯色背景。'
+          '竖幅2:3构图，人物居中；禁止半身、头像特写、截断腿脚、额外人物、武器、文字和水印。')
 
 
 def clean_image(data, max_side=1024):
@@ -49,7 +54,7 @@ def provider_edit(photo):
     encoded = base64.b64encode(photo).decode('ascii')
     payload = {'model': 'wan2.6-image', 'input': {'messages': [{'role': 'user', 'content': [
         {'image': 'data:image/jpeg;base64,' + encoded}, {'text': PROMPT}]}]},
-        'parameters': {'n': 1, 'enable_interleave': False, 'size': '1024*1024', 'prompt_extend': False, 'watermark': False}}
+        'parameters': {'n': 1, 'enable_interleave': False, 'size': OUTPUT_SIZE, 'prompt_extend': False, 'watermark': False}}
     response = session.post('https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
                             headers={'Authorization': 'Bearer ' + key}, json=payload, timeout=(15, 240))
     response.raise_for_status()
@@ -67,7 +72,7 @@ def provider_edit(photo):
             if size > 6_000_000:
                 raise ValueError('result too large')
             chunks.append(chunk)
-    return clean_image(b''.join(chunks), 768)
+    return clean_image(b''.join(chunks), 1024)
 
 
 class Jobs:
@@ -101,7 +106,7 @@ class Jobs:
     def work(self, key, photo):
         try:
             result = self.generate(photo)
-            value = {'status': 'ready', 'image': base64.b64encode(result).decode('ascii')}
+            value = {'status': 'ready', 'image': base64.b64encode(result).decode('ascii'), 'framing': FRAMING}
         except Exception:
             value = {'status': 'failed', 'message': '形象生成未完成，请稍后重试。'}
         finally:

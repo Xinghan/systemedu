@@ -7,6 +7,7 @@ struct ExpeditionHomeView: View {
     let profile: CrewProfile
     let completed: Int
     let actionTitle: String
+    var onOpenProfile: () -> Void = {}
     let onContinue: () -> Void
     private var current: Int { story.chapters.firstIndex { $0.id == chapter.id } ?? 0 }
     var body: some View {
@@ -61,12 +62,15 @@ struct ExpeditionHomeView: View {
                         Label("14 份署名成果", systemImage: "checkmark.seal")
                     }.font(.caption).foregroundStyle(Color.expeditionGold)
                 }.frame(maxWidth: .infinity, alignment: .leading)
-                VStack(spacing: 12) {
-                    CrewAvatar(profile: profile, size: 96)
-                    Text(profile.name).font(.title3.bold())
-                    Text(profile.role.title).font(.subheadline).foregroundStyle(Color.expeditionGold)
-                    Text(profile.role.duty).font(.caption).multilineTextAlignment(.center).foregroundStyle(.white.opacity(0.75))
-                }.frame(width: 150).padding(.vertical, 22).background(Color.expeditionNight.opacity(0.7), in: RoundedRectangle(cornerRadius: 22))
+                Button(action: onOpenProfile) {
+                    VStack(spacing: 10) {
+                        if profile.avatarFraming == "full-body-v1" { CrewFullPortrait(profile: profile).frame(width: 140) }
+                        else { CrewAvatar(profile: profile, size: 96) }
+                        Text(profile.name).font(.title3.bold())
+                        Text(profile.role.title).font(.subheadline).foregroundStyle(Color.expeditionGold)
+                        Text("查看队员档案").font(.caption).foregroundStyle(.white.opacity(0.65))
+                    }.frame(width: 160).padding(.vertical, 18).background(Color.expeditionNight.opacity(0.7), in: RoundedRectangle(cornerRadius: 22))
+                }.buttonStyle(.plain).accessibilityLabel("查看\(profile.name)的队员档案").accessibilityIdentifier("crew-open-profile")
             }.padding(28)
         }.frame(minHeight: 290).clipShape(RoundedRectangle(cornerRadius: 26))
     }

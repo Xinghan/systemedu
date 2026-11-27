@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 final class TabletMissionTests: XCTestCase {
     override func setUp() { super.setUp(); continueAfterFailure = false }
@@ -22,6 +23,57 @@ final class TabletMissionTests: XCTestCase {
     }
     @MainActor private func capture(_ name: String) {
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
+    }
+    @MainActor private func portraitApp(fullBody: Bool = true) throws -> XCUIApplication {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "crew-full-body", withExtension: "jpg", subdirectory: "Fixtures"))
+        var data = try Data(contentsOf: url)
+        if !fullBody {
+            let image = try XCTUnwrap(UIImage(data: data)?.cgImage)
+            let crop = try XCTUnwrap(image.cropping(to: CGRect(x: 0, y: 0, width: image.width, height: image.height / 2)))
+            data = try XCTUnwrap(UIImage(cgImage: crop).jpegData(compressionQuality: 0.85))
+        }
+        let app = XCUIApplication()
+        app.launchEnvironment["SYSTEMEDU_TEST_STORE"] = UUID().uuidString
+        app.launchEnvironment["SYSTEMEDU_TEST_CREW_IMAGE"] = data.base64EncodedString()
+        if fullBody { app.launchEnvironment["SYSTEMEDU_TEST_CREW_FRAMING"] = "full-body-v1" }
+        app.launch(); enter(app); return app
+    }
+    @MainActor func testFullBodyProfileFitsBothOrientationsAndCancelKeepsIdentity() throws {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = try portraitApp()
+        app.buttons["crew-edit"].tap()
+        let portrait = app.images["crew-profile-portrait"]
+        XCTAssertTrue(portrait.waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertEqual(portrait.label, "Portrait QA的全身卡通形象")
+        for orientation: UIDeviceOrientation in [.landscapeLeft, .portrait] {
+            XCUIDevice.shared.orientation = orientation
+            XCTAssertTrue(portrait.isHittable)
+            XCTAssertTrue(app.windows.firstMatch.frame.contains(portrait.frame), "The full figure must fit within the screen")
+            capture(orientation == .portrait ? "crew-full-body-profile-portrait" : "crew-full-body-profile-landscape")
+        }
+        let edit = app.buttons["crew-profile-edit"]
+        if !edit.isHittable { app.swipeUp() }; edit.tap()
+        let name = app.textFields["crew-name"]; XCTAssertTrue(name.waitForExistence(timeout: 10))
+        name.tap(); name.typeText(" Cancelled")
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertEqual(app.staticTexts["crew-profile-name"].label, "Portrait QA")
+        app.buttons["完成"].tap()
+        app.terminate(); app.launch(); enter(app); app.buttons["crew-edit"].tap()
+        XCTAssertTrue(portrait.waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["crew-profile-name"].label, "Portrait QA")
+    }
+    @MainActor func testLegacyPortraitCanOpenUpgradeWithoutLosingExistingImage() throws {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = try portraitApp(fullBody: false)
+        app.buttons["crew-edit"].tap()
+        XCTAssertTrue(app.images["crew-profile-portrait"].waitForExistence(timeout: 10))
+        app.buttons["crew-profile-edit"].tap()
+        let regenerate = app.buttons["crew-regenerate"]
+        if !regenerate.isHittable { app.swipeUp() }
+        XCTAssertTrue(regenerate.isEnabled); XCTAssertEqual(regenerate.label, "用当前形象生成全身立绘")
+        capture("crew-existing-portrait-upgrade")
+        app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertEqual(app.images["crew-profile-portrait"].label, "Portrait QA的卡通形象")
     }
     @MainActor func testSingleRouteIdentityAndReturnToHome() {
         XCUIDevice.shared.orientation = .landscapeLeft

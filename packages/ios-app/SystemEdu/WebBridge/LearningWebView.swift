@@ -143,7 +143,7 @@ struct LearningWebView: UIViewRepresentable {
 
 enum CrewClassroomIdentity {
     static func payload(_ profile: CrewProfile) -> [String: String] {
-        let portrait = profile.avatar.flatMap { CrewImage.jpeg($0, side: 160) }
+        let portrait = (profile.avatarThumbnail ?? profile.avatar).flatMap { CrewImage.jpeg($0, side: 160) }
         return ["name": profile.name, "role": profile.role.title, "duty": profile.role.duty,
                 "avatar": portrait.map { "data:image/jpeg;base64," + $0.base64EncodedString() } ?? profile.role.characterImagePath]
     }

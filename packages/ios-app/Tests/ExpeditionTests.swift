@@ -14,7 +14,8 @@ final class ExpeditionTests: XCTestCase {
         let input = try XCTUnwrap(CrewImage.jpeg(Data(contentsOf: url)))
         let result = try await AvatarService.generate(input)
         let image = try XCTUnwrap(UIImage(data: result))
-        XCTAssertLessThanOrEqual(max(image.size.width, image.size.height), 640)
+        XCTAssertLessThanOrEqual(max(image.size.width, image.size.height), 1024)
+        XCTAssertGreaterThan(image.size.height, image.size.width)
         XCTAssertNotEqual(result, input)
     }
     func testEveryOriginalNodeHasExactlyOneChapterAndEveryChapterHasAWorkProduct() throws {
@@ -53,11 +54,37 @@ final class ExpeditionTests: XCTestCase {
         var profile = CrewProfile(name: "星禾", role: story.roles[0], avatar: nil)
         try store.saveDocument(profile, key: CrewProfile.key)
         profile.name = "小航"; profile.role = story.roles[2]
+        profile.avatar = Data("full portrait".utf8); profile.avatarThumbnail = Data("face thumbnail".utf8); profile.avatarFraming = "full-body-v1"
         try store.saveDocument(profile, key: CrewProfile.key)
         XCTAssertEqual(store.load(activity)?["note"] as? String, "original work")
         let reopened = try LearningStore(url: url)
-        XCTAssertEqual(try reopened.document(CrewProfile.key, as: CrewProfile.self)?.name, "小航")
+        XCTAssertEqual(try reopened.document(CrewProfile.key, as: CrewProfile.self), profile)
         XCTAssertNil(try LearningStore(url: url, owner: "other").document(CrewProfile.key, as: CrewProfile.self))
+    }
+    func testLegacyCrewProfileStillDecodesWithoutFullBodyFields() throws {
+        let profile = CrewProfile(name: "原队员", role: try XCTUnwrap(Expedition.current?.roles.first), avatar: Data("old portrait".utf8))
+        var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(profile)) as? [String: Any])
+        legacy.removeValue(forKey: "avatarThumbnail"); legacy.removeValue(forKey: "avatarFraming")
+        let decoded = try JSONDecoder().decode(CrewProfile.self, from: JSONSerialization.data(withJSONObject: legacy))
+        XCTAssertEqual(decoded, profile); XCTAssertNil(decoded.avatarThumbnail); XCTAssertNil(decoded.avatarFraming)
+    }
+    func testFullBodyThumbnailUsesUpperPortraitAndClassroomReceivesOnlyFace() throws {
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1
+        let original = UIGraphicsImageRenderer(size: CGSize(width: 600, height: 900), format: format).jpegData(withCompressionQuality: 1) { context in
+            UIColor.blue.setFill(); context.fill(CGRect(x: 0, y: 0, width: 600, height: 900))
+            UIColor.red.setFill(); context.fill(CGRect(x: 0, y: 0, width: 600, height: 400))
+        }
+        let thumbnail = try XCTUnwrap(CrewImage.faceThumbnail(original))
+        let image = try XCTUnwrap(UIImage(data: thumbnail)); XCTAssertEqual(image.size, CGSize(width: 160, height: 160))
+        let profile = CrewProfile(name: "全身队员", role: try XCTUnwrap(Expedition.current?.roles.first), avatar: original, avatarThumbnail: thumbnail, avatarFraming: "full-body-v1")
+        let encoded = try XCTUnwrap(CrewClassroomIdentity.payload(profile)["avatar"]?.split(separator: ",").last)
+        let face = try XCTUnwrap(Data(base64Encoded: String(encoded)).flatMap(UIImage.init(data:))?.cgImage)
+        var pixel = [UInt8](repeating: 0, count: 4)
+        let context = try XCTUnwrap(CGContext(data: &pixel, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.draw(face, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        XCTAssertGreaterThan(pixel[0], 220); XCTAssertLessThan(pixel[2], 30, "The small avatar should show the upper face region, not the whole blue body")
+        XCTAssertEqual(profile.avatar, original)
+        XCTAssertNil(CrewImage.faceThumbnail(Data("invalid".utf8)))
     }
     func testCompletionNeedsArtifactsAndReplacingEvidenceInvalidatesSelfCheck() throws {
         let chapter = try XCTUnwrap(Expedition.current?.chapters[1])

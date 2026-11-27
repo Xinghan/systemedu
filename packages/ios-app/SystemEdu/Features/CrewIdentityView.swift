@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 import ImageIO
 import AVFoundation
+import Vision
 
 private enum AvatarFailure: LocalizedError {
     case unavailable, failed, image
@@ -20,6 +21,30 @@ enum CrewImage {
               let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, [kCGImageSourceCreateThumbnailFromImageAlways: true,
                   kCGImageSourceThumbnailMaxPixelSize: side, kCGImageSourceCreateThumbnailWithTransform: true] as CFDictionary) else { return nil }
         return UIImage(cgImage: cg).jpegData(compressionQuality: 0.85)
+    }
+    // Keep the full illustration untouched; only the small navigation portrait is cropped.
+    static func faceThumbnail(_ data: Data, side: CGFloat = 160) -> Data? {
+        guard let image = UIImage(data: data), let cg = image.cgImage else { return nil }
+        let width = CGFloat(cg.width), height = CGFloat(cg.height)
+        let request = VNDetectFaceRectanglesRequest()
+        try? VNImageRequestHandler(cgImage: cg).perform([request])
+        let face = request.results?.max { $0.boundingBox.width * $0.boundingBox.height < $1.boundingBox.width * $1.boundingBox.height }?.boundingBox
+        let length: CGFloat
+        let center: CGPoint
+        if let face {
+            length = min(min(width, height), max(face.width * width, face.height * height) * 2.15)
+            center = CGPoint(x: face.midX * width, y: (1 - face.midY) * height - face.height * height * 0.08)
+        } else {
+            // Cartoon face detection can fail. The generation contract centers the head near the top.
+            length = min(width * 0.54, height)
+            center = CGPoint(x: width / 2, y: height * 0.22)
+        }
+        let rect = CGRect(x: max(0, min(width - length, center.x - length / 2)), y: max(0, min(height - length, center.y - length / 2)), width: length, height: length).integral
+        guard let crop = cg.cropping(to: rect) else { return nil }
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1
+        return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).jpegData(withCompressionQuality: 0.86) { _ in
+            UIImage(cgImage: crop).draw(in: CGRect(x: 0, y: 0, width: side, height: side))
+        }
     }
 }
 
@@ -53,8 +78,9 @@ enum AvatarService {
                   let value = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw AvatarFailure.failed }
             if value["status"] as? String == "failed" { throw AvatarFailure.failed }
             if value["status"] as? String == "ready" {
+                guard value["framing"] as? String == "full-body-v1" else { throw AvatarFailure.unavailable }
                 guard let image = value["image"] as? String, let bytes = Data(base64Encoded: image),
-                      let final = CrewImage.jpeg(bytes, side: 640) else { throw AvatarFailure.image }
+                      let final = CrewImage.jpeg(bytes, side: 1024) else { throw AvatarFailure.image }
                 return final
             }
         }
@@ -67,7 +93,7 @@ struct CrewAvatar: View {
     var size: CGFloat = 46
     var body: some View {
         Group {
-            if let data = profile?.avatar, let image = UIImage(data: data) {
+            if let data = profile?.avatarThumbnail ?? profile?.avatar, let image = UIImage(data: data) {
                 Image(uiImage: image).resizable().scaledToFill()
             } else {
                 let role = profile?.role ?? Expedition.current?.roles.first
@@ -119,6 +145,8 @@ struct CrewIdentityView: View {
     @State private var picker: PhotosPickerItem?
     @State private var photo: Data?
     @State private var avatar: Data?
+    @State private var avatarThumbnail: Data?
+    @State private var avatarFraming: String?
     @State private var generating = false
     @State private var loadingPhoto = false
     @State private var error: String?
@@ -134,6 +162,8 @@ struct CrewIdentityView: View {
         _name = State(initialValue: existing?.name ?? "")
         _roleID = State(initialValue: existing?.role.id ?? story.roles[0].id)
         _avatar = State(initialValue: existing?.avatar)
+        _avatarThumbnail = State(initialValue: existing?.avatarThumbnail)
+        _avatarFraming = State(initialValue: existing?.avatarFraming)
     }
     private var role: ExpeditionRole { story.roles.first { $0.id == roleID } ?? story.roles[0] }
     private var needsGeneration: Bool { photo != nil && avatar == nil }
@@ -184,8 +214,8 @@ struct CrewIdentityView: View {
                     LinearGradient(colors: [role.crewAccent.opacity(0.24), .clear], startPoint: .topLeading, endPoint: .bottomTrailing)
                     Image(uiImage: image).resizable().scaledToFit().padding(.top, 12)
                 }
-                if generating { Color.black.opacity(0.55).clipShape(RoundedRectangle(cornerRadius: 28)); ProgressView("正在设计你的动画形象…").tint(.white) }
-            }.frame(height: 350).clipShape(RoundedRectangle(cornerRadius: 28)).accessibilityIdentifier("crew-avatar-preview")
+                if generating { Color.black.opacity(0.55).clipShape(RoundedRectangle(cornerRadius: 28)); ProgressView("正在设计你的全身形象…").tint(.white) }
+            }.frame(height: 450).clipShape(RoundedRectangle(cornerRadius: 28)).accessibilityIdentifier("crew-avatar-preview")
             if needsGeneration { Text("原照片 · 仅在本机预览").font(.caption).foregroundStyle(Color.expeditionGold) }
             Text(name.isEmpty ? "等待你的名字" : "\(name) · \(role.title)").font(.title2.bold())
             Text("你的名字和形象会出现在任务简报、课堂和每一份署名作品上。").font(.callout).foregroundStyle(.white.opacity(0.7)).lineSpacing(5)
@@ -224,31 +254,32 @@ struct CrewIdentityView: View {
                 }
             }
             VStack(alignment: .leading, spacing: 12) {
-                Text("03  照片变成动画形象 · 可选").font(.headline)
+                Text("03  照片变成全身卡通队员 · 可选").font(.headline)
                 HStack(spacing: 18) {
                     Button { editingName = false; cameraRequest = Task { await openCamera() } } label: { Label("拍一张", systemImage: "camera") }.accessibilityIdentifier("crew-take-photo")
                     PhotosPicker(selection: $picker, matching: .images) { Label("从相册选择", systemImage: "photo") }.accessibilityIdentifier("crew-choose-photo")
                 }.buttonStyle(.bordered).disabled(generating || loadingPhoto || requestingCamera).frame(minHeight: 44)
                 if photo != nil || avatar != nil {
                     HStack(spacing: 18) {
-                        if photo != nil && avatar != nil {
-                            Button("重新生成") { generate() }.disabled(generating || loadingPhoto).accessibilityIdentifier("crew-regenerate")
+                        if avatar != nil {
+                            Button(avatarFraming == "full-body-v1" ? "重新设计全身形象" : "用当前形象生成全身立绘") { generate() }.disabled(generating || loadingPhoto).accessibilityIdentifier("crew-regenerate")
                         }
-                        Button("使用卡通队员") { generation?.cancel(); selectionVersion = UUID(); generating = false; photo = nil; avatar = nil; picker = nil; error = nil }.font(.caption)
+                        Button("使用卡通队员") { generation?.cancel(); selectionVersion = UUID(); generating = false; photo = nil; avatar = nil; avatarThumbnail = nil; avatarFraming = nil; picker = nil; error = nil }.font(.caption)
                     }.frame(minHeight: 44)
                 }
                 if loadingPhoto { ProgressView("正在读取照片…") }
-                Text("拍摄或选择照片后先在本机预览。点击生成，照片才会发送至通义图像服务重绘，服务方按其规则处理。本机只保存你确认的动画形象，不保存原照片。").font(.caption).foregroundStyle(.white.opacity(0.62)).lineSpacing(4)
+                Text("从头到鞋的完整立绘，保留你的脸型与发型。也可以用已经确认的卡通头像补全全身。").font(.subheadline).foregroundStyle(.white.opacity(0.78))
+                Text("点击生成后，选中的照片或当前卡通形象才会发送至通义图像服务重绘，服务方按其规则处理。只保留你确认的卡通形象，不保存原照片。").font(.caption).foregroundStyle(.white.opacity(0.62)).lineSpacing(4)
                 if let error { Text(error).font(.callout).foregroundStyle(Color.expeditionGold).accessibilityIdentifier("crew-error") }
             }
             Button {
                 if needsGeneration { generate() }
                 else {
                     generation?.cancel(); photo = nil
-                    onConfirm(CrewProfile(name: name.trimmingCharacters(in: .whitespacesAndNewlines), role: role, avatar: avatar))
+                    onConfirm(CrewProfile(name: name.trimmingCharacters(in: .whitespacesAndNewlines), role: role, avatar: avatar, avatarThumbnail: avatarThumbnail, avatarFraming: avatarFraming))
                 }
             } label: {
-                HStack { Text(generating ? "正在生成你的动画形象…" : needsGeneration ? "将照片生成动画形象" : existing == nil ? "确认形象，加入远航" : "保存我的身份"); Spacer(); Image(systemName: "arrow.right") }
+                HStack { Text(generating ? "正在生成你的全身形象…" : needsGeneration ? "生成我的全身卡通形象" : existing == nil ? "确认形象，加入远航" : "保存我的身份"); Spacer(); Image(systemName: "arrow.right") }
                     .font(.headline).padding(18).foregroundStyle(Color.expeditionNight).background(Color.expeditionGold, in: RoundedRectangle(cornerRadius: 15))
             }.buttonStyle(.plain).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || generating || loadingPhoto || requestingCamera).opacity(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.45 : 1).accessibilityIdentifier(needsGeneration ? "crew-generate" : "crew-confirm")
         }
@@ -261,7 +292,7 @@ struct CrewIdentityView: View {
         case .captured(let image):
             guard let bytes = image.jpegData(compressionQuality: 0.9), let clean = CrewImage.jpeg(bytes) else { error = AvatarFailure.image.localizedDescription; return }
             generation?.cancel(); selectionVersion = UUID(); generating = false
-            picker = nil; photo = clean; avatar = nil; error = nil
+            picker = nil; photo = clean; avatar = nil; avatarThumbnail = nil; avatarFraming = nil; error = nil
         }
     }
     @MainActor private func openCamera() async {
@@ -283,7 +314,7 @@ struct CrewIdentityView: View {
     }
     private func loadPhoto() async {
         guard let picker else { return }
-        generation?.cancel(); generating = false; loadingPhoto = true; error = nil; avatar = nil
+        generation?.cancel(); generating = false; loadingPhoto = true; error = nil; avatar = nil; avatarThumbnail = nil; avatarFraming = nil
         let version = UUID(); selectionVersion = version
         defer { if selectionVersion == version { loadingPhoto = false } }
         do {
@@ -292,12 +323,13 @@ struct CrewIdentityView: View {
         } catch { if !Task.isCancelled, selectionVersion == version { self.error = AvatarFailure.image.localizedDescription } }
     }
     private func generate() {
-        guard let photo else { return }; generating = true; error = nil
+        guard !generating, let reference = photo ?? avatar else { return }; generating = true; error = nil
         let version = selectionVersion
         generation = Task {
             do {
-                let image = try await AvatarService.generate(photo)
-                guard !Task.isCancelled, version == selectionVersion else { return }; avatar = image; generating = false
+                let image = try await AvatarService.generate(reference)
+                guard !Task.isCancelled, version == selectionVersion else { return }
+                avatar = image; avatarThumbnail = CrewImage.faceThumbnail(image); avatarFraming = "full-body-v1"; generating = false
             } catch {
                 guard !Task.isCancelled, version == selectionVersion else { return }; generating = false
                 self.error = (error as? AvatarFailure)?.localizedDescription ?? AvatarFailure.unavailable.localizedDescription

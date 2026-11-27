@@ -54,6 +54,9 @@ for name, directory, product_type in [("SystemEdu", "SystemEdu", "application"),
     else:
         proxy = add(name + "proxy", "PBXContainerItemProxy", containerPortal=project_id, proxyType="1", remoteGlobalIDString=app_id, remoteInfo="SystemEdu")
         dependencies.append(add(name + "dependency", "PBXTargetDependency", target=app_id, targetProxy=proxy))
+        if name == "SystemEduUITests":
+            folder = add("ui-fixtures", "PBXFileReference", lastKnownFileType="folder", path="UITests/Fixtures", sourceTree="SOURCE_ROOT")
+            children.append(folder); resources.append(add("ui-fixtures-copy", "PBXBuildFile", fileRef=folder))
     phases.extend([add(name + "frameworks", "PBXFrameworksBuildPhase", buildActionMask="2147483647", files=frameworks, runOnlyForDeploymentPostprocessing="0"), add(name + "resources", "PBXResourcesBuildPhase", buildActionMask="2147483647", files=resources, runOnlyForDeploymentPostprocessing="0")])
     extension = ".app" if name == "SystemEdu" else ".xctest"
     product = add(name + "product", "PBXFileReference", explicitFileType="wrapper.application" if name == "SystemEdu" else "wrapper.cfbundle", path=name + extension, sourceTree="BUILT_PRODUCTS_DIR", includeInIndex="0")
